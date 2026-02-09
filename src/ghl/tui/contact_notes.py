@@ -13,6 +13,20 @@ from ..client import GHLClient
 from ..services import contacts as contact_svc
 
 
+def format_note_date(date_added: str) -> str:
+    """Format API datetime (e.g. 2026-02-09T21:38:48Z) for display."""
+    if not date_added:
+        return ""
+    raw = date_added.strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw[:19])
+        return dt.strftime("%b %d, %Y at %I:%M %p")
+    except (ValueError, TypeError):
+        return date_added[:19] if len(date_added) >= 19 else date_added
+
+
 class ContactNotesModal(ModalScreen[None]):
     """Modal showing notes for a contact and allowing add."""
 
@@ -41,19 +55,6 @@ class ContactNotesModal(ModalScreen[None]):
     def on_mount(self) -> None:
         self._load_notes()
 
-    def _format_note_date(self, date_added: str) -> str:
-        """Format API datetime (e.g. 2026-02-09T21:38:48Z) for display."""
-        if not date_added:
-            return ""
-        raw = date_added.strip()
-        if raw.endswith("Z"):
-            raw = raw[:-1] + "+00:00"
-        try:
-            dt = datetime.fromisoformat(raw[:19])
-            return dt.strftime("%b %d, %Y at %I:%M %p")
-        except (ValueError, TypeError):
-            return date_added[:19] if len(date_added) >= 19 else date_added
-
     def _load_notes(self) -> None:
         with GHLClient(get_token(), get_location_id()) as client:
             notes = contact_svc.list_notes(client, self._contact_id)
@@ -61,7 +62,7 @@ class ContactNotesModal(ModalScreen[None]):
         log.clear()
         for i, n in enumerate(notes):
             body = n.get("body") or ""
-            date_str = self._format_note_date(n.get("dateAdded") or "")
+            date_str = format_note_date(n.get("dateAdded") or "")
             if date_str:
                 log.write(f"[dim]{date_str}[/dim]\n{body}")
             else:

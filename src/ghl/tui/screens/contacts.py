@@ -20,7 +20,7 @@ from ...auth import get_location_id, get_token
 from ...client import GHLClient
 from ...services import contacts as contact_svc
 from ..contact_edit import ContactEditModal
-from ..contact_notes import ContactNotesModal
+from ..contact_notes import ContactNotesModal, format_note_date
 from ..contact_opportunities import ContactOpportunitiesModal
 from ..contact_tag import AddTagModal, RemoveTagModal
 
@@ -78,6 +78,44 @@ class ContactDetail(Static):
         return self._contact
 
 
+class ContactNotesPreview(Static):
+    """Shows a preview of notes for the selected contact below the main detail."""
+
+    DEFAULT_CSS = """
+    ContactNotesPreview {
+        width: 1fr;
+        padding: 1 2;
+        border: solid $primary-darken-2;
+        border-top: none;
+        background: $surface-darken-2;
+        height: auto;
+        max-height: 12;
+        overflow-y: auto;
+    }
+    """
+
+    def show_notes(self, notes: list[dict]) -> None:
+        """Update content with the given notes (list of dicts with body, dateAdded)."""
+        if not notes:
+            self.update("[dim]No notes. Press n to add one.[/dim]")
+            return
+        lines = ["[bold]Notes[/bold]", ""]
+        for i, n in enumerate(notes):
+            body = (n.get("body") or "").replace("\n", " ")
+            date_str = format_note_date(n.get("dateAdded") or "")
+            if date_str:
+                lines.append(f"[dim]{date_str}[/dim]")
+            lines.append(body)
+            if i < len(notes) - 1:
+                lines.append("[dim]─────────────────────────────[/dim]")
+                lines.append("")
+        self.update("\n".join(lines))
+
+    def clear_notes(self) -> None:
+        """Clear the notes preview (no contact selected)."""
+        self.update("")
+
+
 class ContactsView(Container):
     """Contacts browse, search, and detail panel."""
 
@@ -126,6 +164,7 @@ class ContactsView(Container):
             yield ListView(id="contacts-list")
         with Vertical(id="contacts-right"):
             yield ContactDetail(id="contact-detail")
+            yield ContactNotesPreview(id="contact-notes-preview")
 
     def on_mount(self) -> None:
         self.load_contacts()
@@ -148,11 +187,12 @@ class ContactsView(Container):
             return (contacts, rli)
 
     @work(thread=True)
-    def load_contact_detail(self, contact_id: str) -> tuple[dict, object]:
+    def load_contact_detail(self, contact_id: str) -> tuple[dict, list[dict], object]:
         with GHLClient(get_token(), get_location_id()) as client:
             contact = contact_svc.get_contact(client, contact_id)
+            notes = contact_svc.list_notes(client, contact_id)
             rli = client.rate_limit_info
-            return (contact, rli)
+            return (contact, notes, rli)
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.state != WorkerState.SUCCESS or not event.worker.result:
@@ -163,7 +203,17 @@ class ContactsView(Container):
         except Exception:
             pass
         result = event.worker.result
-        if isinstance(result, tuple) and len(result) == 2:
+        if isinstance(result, tuple) and len(result) == 3:
+            contact, notes, rli = result
+            try:
+                header = self.screen.query_one("#header_bar")
+                header.update_rate_limit(rli)
+            except Exception:
+                pass
+            if isinstance(contact, dict) and contact.get("id"):
+                self.query_one("#contact-detail", ContactDetail).show_contact(contact)
+                self.query_one("#contact-notes-preview", ContactNotesPreview).show_notes(notes)
+        elif isinstance(result, tuple) and len(result) == 2:
             data, rli = result
             try:
                 header = self.screen.query_one("#header_bar")
@@ -172,9 +222,10 @@ class ContactsView(Container):
                 pass
             if isinstance(data, list):
                 self._contacts = data
+                if not self._contacts:
+                    self.query_one("#contact-detail", ContactDetail).clear_contact()
+                    self.query_one("#contact-notes-preview", ContactNotesPreview).clear_notes()
                 self._refresh_list()
-            elif isinstance(data, dict) and data.get("id"):
-                self.query_one("#contact-detail", ContactDetail).show_contact(data)
 
     def _refresh_list(self) -> None:
         lst = self.query_one("#contacts-list", ListView)
