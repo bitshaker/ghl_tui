@@ -7,7 +7,9 @@ import click
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..config import config_manager
+from ..options import output_format_options
 from ..output import output_data, print_success
+from ..services import opportunities as opp_svc
 
 OPPORTUNITY_COLUMNS = [
     ("id", "ID"),
@@ -35,12 +37,14 @@ OPPORTUNITY_FIELDS = [
 
 
 @click.group()
+@output_format_options
 def opportunities():
     """Manage opportunities (pipeline deals)."""
     pass
 
 
 @opportunities.command("list")
+@output_format_options
 @click.option("--pipeline", "-p", "pipeline_id", help="Filter by pipeline ID")
 @click.option("--stage", "-s", "stage_id", help="Filter by stage ID")
 @click.option("--status", help="Filter by status (open, won, lost, abandoned)")
@@ -63,18 +67,15 @@ def list_opportunities(
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        params = {"limit": limit, "skip": skip}
-        if pipeline_id:
-            params["pipelineId"] = pipeline_id
-        if stage_id:
-            params["pipelineStageId"] = stage_id
-        if status:
-            params["status"] = status
-        if contact_id:
-            params["contactId"] = contact_id
-
-        response = client.get("/opportunities/search", params=params)
-        opportunities_list = response.get("opportunities", [])
+        opportunities_list = opp_svc.list_opportunities(
+            client,
+            limit=limit,
+            skip=skip,
+            pipeline_id=pipeline_id,
+            stage_id=stage_id,
+            status=status,
+            contact_id=contact_id,
+        )
 
         output_data(
             opportunities_list,
@@ -85,6 +86,7 @@ def list_opportunities(
 
 
 @opportunities.command("get")
+@output_format_options
 @click.argument("opportunity_id")
 @click.pass_context
 def get_opportunity(ctx, opportunity_id: str):
@@ -94,13 +96,13 @@ def get_opportunity(ctx, opportunity_id: str):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get(f"/opportunities/{opportunity_id}")
-        opportunity = response.get("opportunity", response)
+        opportunity = opp_svc.get_opportunity(client, opportunity_id)
 
         output_data(opportunity, format=output_format, single_fields=OPPORTUNITY_FIELDS)
 
 
 @opportunities.command("create")
+@output_format_options
 @click.option("--contact", "-c", "contact_id", required=True, help="Contact ID")
 @click.option("--pipeline", "-p", "pipeline_id", required=True, help="Pipeline ID")
 @click.option("--stage", "-s", "stage_id", required=True, help="Pipeline stage ID")
@@ -125,31 +127,29 @@ def create_opportunity(
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        data = {
-            "contactId": contact_id,
-            "pipelineId": pipeline_id,
-            "pipelineStageId": stage_id,
-            "name": name,
-            "status": status,
-            "locationId": location_id,
-        }
-
-        if value is not None:
-            data["monetaryValue"] = value
-        if source:
-            data["source"] = source
-
-        response = client.post("/opportunities/", json=data)
-        opportunity = response.get("opportunity", response)
+        opportunity = opp_svc.create_opportunity(
+            client,
+            location_id=location_id,
+            contact_id=contact_id,
+            pipeline_id=pipeline_id,
+            stage_id=stage_id,
+            name=name,
+            status=status,
+            monetary_value=value,
+            source=source,
+        )
 
         if output_format == "quiet":
             click.echo(opportunity.get("id"))
         else:
             print_success(f"Opportunity created: {opportunity.get('id')}")
-            output_data(opportunity, format=output_format, single_fields=OPPORTUNITY_FIELDS)
+            output_data(
+                opportunity, format=output_format, single_fields=OPPORTUNITY_FIELDS
+            )
 
 
 @opportunities.command("update")
+@output_format_options
 @click.argument("opportunity_id")
 @click.option("--name", "-n", help="New name")
 @click.option("--value", "-v", type=float, help="New monetary value")
@@ -169,29 +169,27 @@ def update_opportunity(
     location_id = get_location_id()
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
+    if not any(v is not None for v in (name, value, status, source)):
+        raise click.ClickException("No fields to update. Specify at least one option.")
+
     with GHLClient(token, location_id) as client:
-        data = {}
-
-        if name:
-            data["name"] = name
-        if value is not None:
-            data["monetaryValue"] = value
-        if status:
-            data["status"] = status
-        if source:
-            data["source"] = source
-
-        if not data:
-            raise click.ClickException("No fields to update. Specify at least one option.")
-
-        response = client.put(f"/opportunities/{opportunity_id}", json=data)
-        opportunity = response.get("opportunity", response)
+        opportunity = opp_svc.update_opportunity(
+            client,
+            opportunity_id,
+            name=name,
+            monetary_value=value,
+            status=status,
+            source=source,
+        )
 
         print_success(f"Opportunity updated: {opportunity_id}")
-        output_data(opportunity, format=output_format, single_fields=OPPORTUNITY_FIELDS)
+        output_data(
+            opportunity, format=output_format, single_fields=OPPORTUNITY_FIELDS
+        )
 
 
 @opportunities.command("move")
+@output_format_options
 @click.argument("opportunity_id")
 @click.option("--stage", "-s", "stage_id", required=True, help="Target stage ID")
 @click.pass_context
@@ -202,13 +200,12 @@ def move_opportunity(ctx, opportunity_id: str, stage_id: str):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.put(
-            f"/opportunities/{opportunity_id}", json={"pipelineStageId": stage_id}
-        )
-        opportunity = response.get("opportunity", response)
+        opportunity = opp_svc.move_opportunity(client, opportunity_id, stage_id)
 
         print_success(f"Opportunity moved to stage: {stage_id}")
-        output_data(opportunity, format=output_format, single_fields=OPPORTUNITY_FIELDS)
+        output_data(
+            opportunity, format=output_format, single_fields=OPPORTUNITY_FIELDS
+        )
 
 
 @opportunities.command("delete")
@@ -220,7 +217,7 @@ def delete_opportunity(opportunity_id: str):
     location_id = get_location_id()
 
     with GHLClient(token, location_id) as client:
-        client.delete(f"/opportunities/{opportunity_id}")
+        opp_svc.delete_opportunity(client, opportunity_id)
         print_success(f"Opportunity deleted: {opportunity_id}")
 
 
@@ -232,7 +229,7 @@ def mark_won(opportunity_id: str):
     location_id = get_location_id()
 
     with GHLClient(token, location_id) as client:
-        client.put(f"/opportunities/{opportunity_id}/status", json={"status": "won"})
+        opp_svc.mark_won(client, opportunity_id)
         print_success(f"Opportunity marked as won: {opportunity_id}")
 
 
@@ -244,5 +241,5 @@ def mark_lost(opportunity_id: str):
     location_id = get_location_id()
 
     with GHLClient(token, location_id) as client:
-        client.put(f"/opportunities/{opportunity_id}/status", json={"status": "lost"})
+        opp_svc.mark_lost(client, opportunity_id)
         print_success(f"Opportunity marked as lost: {opportunity_id}")

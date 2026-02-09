@@ -5,6 +5,7 @@ import click
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..config import config_manager
+from ..options import output_format_options
 from ..output import output_data, print_success
 
 TAG_COLUMNS = [
@@ -14,12 +15,14 @@ TAG_COLUMNS = [
 
 
 @click.group()
+@output_format_options
 def tags():
     """Manage tags."""
     pass
 
 
 @tags.command("list")
+@output_format_options
 @click.pass_context
 def list_tags(ctx):
     """List all tags in the location."""
@@ -40,6 +43,7 @@ def list_tags(ctx):
 
 
 @tags.command("create")
+@output_format_options
 @click.argument("name")
 @click.pass_context
 def create_tag(ctx, name: str):
@@ -72,6 +76,7 @@ def delete_tag(tag_id: str):
 
 
 @tags.command("get")
+@output_format_options
 @click.argument("tag_id")
 @click.pass_context
 def get_tag(ctx, tag_id: str):

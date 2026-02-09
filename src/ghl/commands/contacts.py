@@ -7,7 +7,9 @@ import click
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..config import config_manager
+from ..options import output_format_options
 from ..output import output_data, print_success
+from ..services import contacts as contact_svc
 
 # Column definitions for contact list
 CONTACT_COLUMNS = [
@@ -40,12 +42,14 @@ CONTACT_FIELDS = [
 
 
 @click.group()
+@output_format_options
 def contacts():
     """Manage contacts."""
     pass
 
 
 @contacts.command("list")
+@output_format_options
 @click.option("--limit", "-l", default=20, help="Number of contacts to return")
 @click.option("--query", "-q", help="Search query")
 @click.pass_context
@@ -56,12 +60,7 @@ def list_contacts(ctx, limit: int, query: Optional[str]):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        params = {"limit": limit}
-        if query:
-            params["query"] = query
-
-        response = client.get("/contacts/", params=params)
-        contacts_list = response.get("contacts", [])
+        contacts_list = contact_svc.list_contacts(client, limit=limit, query=query)
 
         output_data(
             contacts_list,
@@ -72,6 +71,7 @@ def list_contacts(ctx, limit: int, query: Optional[str]):
 
 
 @contacts.command("get")
+@output_format_options
 @click.argument("contact_id")
 @click.pass_context
 def get_contact(ctx, contact_id: str):
@@ -81,8 +81,7 @@ def get_contact(ctx, contact_id: str):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get(f"/contacts/{contact_id}")
-        contact = response.get("contact", response)
+        contact = contact_svc.get_contact(client, contact_id)
 
         output_data(
             contact,
@@ -92,6 +91,7 @@ def get_contact(ctx, contact_id: str):
 
 
 @contacts.command("create")
+@output_format_options
 @click.option("--email", "-e", help="Email address")
 @click.option("--phone", "-p", help="Phone number")
 @click.option("--first-name", "-f", help="First name")
@@ -121,27 +121,18 @@ def create_contact(
         raise click.ClickException("At least --email or --phone is required")
 
     with GHLClient(token, location_id) as client:
-        data = {"locationId": location_id}
-
-        if email:
-            data["email"] = email
-        if phone:
-            data["phone"] = phone
-        if first_name:
-            data["firstName"] = first_name
-        if last_name:
-            data["lastName"] = last_name
-        if name:
-            data["name"] = name
-        if company:
-            data["companyName"] = company
-        if source:
-            data["source"] = source
-        if tag:
-            data["tags"] = list(tag)
-
-        response = client.post("/contacts/", json=data)
-        contact = response.get("contact", response)
+        contact = contact_svc.create_contact(
+            client,
+            location_id=location_id,
+            email=email,
+            phone=phone,
+            first_name=first_name,
+            last_name=last_name,
+            name=name,
+            company_name=company,
+            source=source,
+            tags=list(tag) if tag else None,
+        )
 
         if output_format == "quiet":
             click.echo(contact.get("id"))
@@ -151,6 +142,7 @@ def create_contact(
 
 
 @contacts.command("update")
+@output_format_options
 @click.argument("contact_id")
 @click.option("--email", "-e", help="Email address")
 @click.option("--phone", "-p", help="Phone number")
@@ -174,27 +166,20 @@ def update_contact(
     location_id = get_location_id()
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
+    if not any(v is not None for v in (email, phone, first_name, last_name, company, source)):
+        raise click.ClickException("No fields to update. Specify at least one option.")
+
     with GHLClient(token, location_id) as client:
-        data = {}
-
-        if email:
-            data["email"] = email
-        if phone:
-            data["phone"] = phone
-        if first_name:
-            data["firstName"] = first_name
-        if last_name:
-            data["lastName"] = last_name
-        if company:
-            data["companyName"] = company
-        if source:
-            data["source"] = source
-
-        if not data:
-            raise click.ClickException("No fields to update. Specify at least one option.")
-
-        response = client.put(f"/contacts/{contact_id}", json=data)
-        contact = response.get("contact", response)
+        contact = contact_svc.update_contact(
+            client,
+            contact_id,
+            email=email,
+            phone=phone,
+            first_name=first_name,
+            last_name=last_name,
+            company_name=company,
+            source=source,
+        )
 
         print_success(f"Contact updated: {contact_id}")
         output_data(contact, format=output_format, single_fields=CONTACT_FIELDS)
@@ -209,11 +194,12 @@ def delete_contact(contact_id: str):
     location_id = get_location_id()
 
     with GHLClient(token, location_id) as client:
-        client.delete(f"/contacts/{contact_id}")
+        contact_svc.delete_contact(client, contact_id)
         print_success(f"Contact deleted: {contact_id}")
 
 
 @contacts.command("search")
+@output_format_options
 @click.argument("query")
 @click.option("--limit", "-l", default=20, help="Number of results")
 @click.pass_context
@@ -224,8 +210,7 @@ def search_contacts(ctx, query: str, limit: int):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get("/contacts/", params={"query": query, "limit": limit})
-        contacts_list = response.get("contacts", [])
+        contacts_list = contact_svc.search_contacts(client, query, limit=limit)
 
         output_data(
             contacts_list,
@@ -244,16 +229,7 @@ def add_tag(contact_id: str, tag: tuple):
     location_id = get_location_id()
 
     with GHLClient(token, location_id) as client:
-        # First get existing tags
-        response = client.get(f"/contacts/{contact_id}")
-        contact = response.get("contact", response)
-        existing_tags = contact.get("tags", []) or []
-
-        # Add new tags
-        all_tags = list(set(existing_tags + list(tag)))
-
-        # Update contact
-        client.put(f"/contacts/{contact_id}", json={"tags": all_tags})
+        contact_svc.add_tag(client, contact_id, list(tag))
         print_success(f"Tags added to contact: {', '.join(tag)}")
 
 
@@ -266,20 +242,12 @@ def remove_tag(contact_id: str, tag: tuple):
     location_id = get_location_id()
 
     with GHLClient(token, location_id) as client:
-        # First get existing tags
-        response = client.get(f"/contacts/{contact_id}")
-        contact = response.get("contact", response)
-        existing_tags = contact.get("tags", []) or []
-
-        # Remove specified tags
-        new_tags = [t for t in existing_tags if t not in tag]
-
-        # Update contact
-        client.put(f"/contacts/{contact_id}", json={"tags": new_tags})
+        contact_svc.remove_tag(client, contact_id, list(tag))
         print_success(f"Tags removed from contact: {', '.join(tag)}")
 
 
 @contacts.command("tasks")
+@output_format_options
 @click.argument("contact_id")
 @click.pass_context
 def list_tasks(ctx, contact_id: str):
@@ -289,8 +257,7 @@ def list_tasks(ctx, contact_id: str):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get(f"/contacts/{contact_id}/tasks")
-        tasks = response.get("tasks", [])
+        tasks = contact_svc.list_tasks(client, contact_id)
 
         columns = [
             ("id", "ID"),
@@ -309,6 +276,7 @@ def list_tasks(ctx, contact_id: str):
 
 
 @contacts.command("notes")
+@output_format_options
 @click.argument("contact_id")
 @click.pass_context
 def list_notes(ctx, contact_id: str):
@@ -318,8 +286,7 @@ def list_notes(ctx, contact_id: str):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get(f"/contacts/{contact_id}/notes")
-        notes = response.get("notes", [])
+        notes = contact_svc.list_notes(client, contact_id)
 
         columns = [
             ("id", "ID"),
@@ -344,6 +311,6 @@ def add_note(contact_id: str, note: str):
     location_id = get_location_id()
 
     with GHLClient(token, location_id) as client:
-        response = client.post(f"/contacts/{contact_id}/notes", json={"body": note})
-        note_id = response.get("note", {}).get("id") or response.get("id")
-        print_success(f"Note added: {note_id}")
+        result = contact_svc.add_note(client, contact_id, note)
+        note_id = result.get("id") if isinstance(result, dict) else None
+        print_success(f"Note added: {note_id or 'ok'}")

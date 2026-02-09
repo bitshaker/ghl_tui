@@ -1,6 +1,6 @@
-# GHL CLI
+# GHL TUI
 
-A comprehensive command-line interface for the GoHighLevel API v2.
+A comprehensive TUI and command-line interface for the GoHighLevel API v2 using Personal Integration Tokens for Auth.
 
 ## Installation
 
@@ -19,7 +19,7 @@ pip install -e .
    - Log into GoHighLevel
    - Go to Settings > Integrations > Private Integrations
    - Click "Create App"
-   - Name it (e.g., "CLI Tool")
+   - Name it (e.g., "GHL TUI")
    - Select required scopes (see below)
    - Copy the generated API key
 

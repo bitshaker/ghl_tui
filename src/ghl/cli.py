@@ -13,7 +13,7 @@ if env_path.exists():
 import click
 
 from . import __version__
-from .auth import AuthError
+from .auth import AuthError, get_location_id, get_token
 from .client import APIError
 from .commands import (
     calendars,
@@ -31,11 +31,11 @@ from .commands import (
 
 @click.group()
 @click.version_option(version=__version__)
-@click.option("--json", "output_format", flag_value="json", help="Output as JSON")
-@click.option("--csv", "output_format", flag_value="csv", help="Output as CSV")
-@click.option("--quiet", "-q", "output_format", flag_value="quiet", help="Output only IDs")
+@click.option("--json", "output_format", flag_value="json", default=None, help="Output as JSON")
+@click.option("--csv", "output_format", flag_value="csv", default=None, help="Output as CSV")
+@click.option("--quiet", "-q", "output_format", flag_value="quiet", default=None, help="Output only IDs")
 @click.pass_context
-def main(ctx, output_format):
+def main(ctx, output_format=None):
     """GoHighLevel CLI - Command-line interface for GoHighLevel API v2.
 
     Manage contacts, calendars, opportunities, conversations, and more
@@ -52,7 +52,8 @@ def main(ctx, output_format):
     https://highlevel.stoplight.io/docs/integrations/
     """
     ctx.ensure_object(dict)
-    ctx.obj["output_format"] = output_format
+    if output_format is not None:
+        ctx.obj["output_format"] = output_format
 
 
 # Register command groups
@@ -66,6 +67,21 @@ main.add_command(locations)
 main.add_command(users)
 main.add_command(tags)
 main.add_command(pipelines)
+
+
+@click.command("tui")
+def tui_cmd():
+    """Launch the interactive TUI (contacts, pipeline board)."""
+    try:
+        get_token()
+        get_location_id()
+    except AuthError as e:
+        raise click.ClickException(str(e))
+    from .tui.app import run_tui
+    run_tui()
+
+
+main.add_command(tui_cmd)
 
 
 def cli():

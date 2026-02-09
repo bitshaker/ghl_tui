@@ -7,6 +7,7 @@ import click
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..config import config_manager
+from ..options import output_format_options
 from ..output import output_data, print_success
 
 CALENDAR_COLUMNS = [
@@ -41,12 +42,14 @@ APPOINTMENT_FIELDS = [
 
 
 @click.group()
+@output_format_options
 def calendars():
     """Manage calendars and appointments."""
     pass
 
 
 @calendars.command("list")
+@output_format_options
 @click.pass_context
 def list_calendars(ctx):
     """List all calendars."""
@@ -67,6 +70,7 @@ def list_calendars(ctx):
 
 
 @calendars.command("get")
+@output_format_options
 @click.argument("calendar_id")
 @click.pass_context
 def get_calendar(ctx, calendar_id: str):
@@ -93,6 +97,7 @@ def get_calendar(ctx, calendar_id: str):
 
 
 @calendars.command("slots")
+@output_format_options
 @click.argument("calendar_id")
 @click.option("--start", "-s", required=True, help="Start date (YYYY-MM-DD)")
 @click.option("--end", "-e", help="End date (YYYY-MM-DD), defaults to start date")
@@ -137,12 +142,14 @@ def get_slots(ctx, calendar_id: str, start: str, end: Optional[str], timezone: O
 
 # Appointments subgroup
 @calendars.group()
+@output_format_options
 def appointments():
     """Manage appointments."""
     pass
 
 
 @appointments.command("list")
+@output_format_options
 @click.option("--calendar", "-c", "calendar_id", help="Filter by calendar ID")
 @click.option("--contact", "contact_id", help="Filter by contact ID")
 @click.option("--start", "-s", help="Start date filter (YYYY-MM-DD)")
@@ -185,6 +192,7 @@ def list_appointments(
 
 
 @appointments.command("get")
+@output_format_options
 @click.argument("appointment_id")
 @click.pass_context
 def get_appointment(ctx, appointment_id: str):
@@ -201,6 +209,7 @@ def get_appointment(ctx, appointment_id: str):
 
 
 @appointments.command("create")
+@output_format_options
 @click.option("--calendar", "-c", "calendar_id", required=True, help="Calendar ID")
 @click.option("--contact", "contact_id", required=True, help="Contact ID")
 @click.option("--slot", "-s", required=True, help="Appointment slot (ISO datetime)")
@@ -248,6 +257,7 @@ def create_appointment(
 
 
 @appointments.command("update")
+@output_format_options
 @click.argument("appointment_id")
 @click.option("--slot", "-s", help="New slot (ISO datetime)")
 @click.option("--title", "-t", help="New title")

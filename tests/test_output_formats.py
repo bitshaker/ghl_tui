@@ -26,7 +26,7 @@ class TestOutputFormats:
         """Test JSON output format."""
         mock_client.get.return_value = {"contacts": sample_contacts}
 
-        result = runner.invoke(main, ["contacts", "list", "--json"])
+        result = runner.invoke(main, ["--json", "contacts", "list"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert isinstance(data, list)
@@ -37,7 +37,7 @@ class TestOutputFormats:
         """Test CSV output format."""
         mock_client.get.return_value = {"contacts": sample_contacts}
 
-        result = runner.invoke(main, ["contacts", "list", "--csv"])
+        result = runner.invoke(main, ["--csv", "contacts", "list"])
         assert result.exit_code == 0
         # CSV should have headers
         assert "ID," in result.output
@@ -50,7 +50,7 @@ class TestOutputFormats:
         """Test quiet format for lists (IDs only)."""
         mock_client.get.return_value = {"contacts": sample_contacts}
 
-        result = runner.invoke(main, ["contacts", "list", "--quiet"])
+        result = runner.invoke(main, ["--quiet", "contacts", "list"])
         assert result.exit_code == 0
         # Should only output IDs, one per line
         output_lines = [line.strip() for line in result.output.strip().split("\n") if line.strip()]
@@ -61,12 +61,34 @@ class TestOutputFormats:
         assert "John" not in result.output
         assert "Doe" not in result.output
 
+    def test_format_options_after_command(self, runner, mock_token, mock_location_id, mock_client, sample_contacts):
+        """Test --json, --csv, --quiet work after the command (e.g. ghl contacts list --quiet)."""
+        mock_client.get.return_value = {"contacts": sample_contacts}
+
+        result_json = runner.invoke(main, ["contacts", "list", "--json"])
+        assert result_json.exit_code == 0
+        data = json.loads(result_json.output)
+        assert isinstance(data, list)
+        assert data[0]["id"] == "contact-1"
+
+        result_csv = runner.invoke(main, ["contacts", "list", "--csv"])
+        assert result_csv.exit_code == 0
+        assert "ID," in result_csv.output
+        assert "contact-1" in result_csv.output
+
+        result_quiet = runner.invoke(main, ["contacts", "list", "--quiet"])
+        assert result_quiet.exit_code == 0
+        output_lines = [line.strip() for line in result_quiet.output.strip().split("\n") if line.strip()]
+        assert len(output_lines) == 2
+        assert "contact-1" in output_lines
+        assert "John" not in result_quiet.output
+
     def test_quiet_format_single(self, runner, mock_token, mock_location_id, mock_client, sample_contact):
         """Test quiet format for single items (ID only)."""
         mock_client.post.return_value = {"contact": sample_contact}
 
         result = runner.invoke(
-            main, ["contacts", "create", "--email", "test@example.com", "--quiet"]
+            main, ["--quiet", "contacts", "create", "--email", "test@example.com"]
         )
         assert result.exit_code == 0
         # Should only output the ID
@@ -94,7 +116,7 @@ class TestOutputFormats:
         mock_client.get.return_value = {"contacts": sample_contacts}
 
         # Override with CSV
-        result = runner.invoke(main, ["contacts", "list", "--csv"])
+        result = runner.invoke(main, ["--csv", "contacts", "list"])
         assert result.exit_code == 0
         # Should use CSV, not JSON
         assert "ID," in result.output

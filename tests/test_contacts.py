@@ -45,7 +45,7 @@ class TestContactCommands:
         """Test listing contacts with --quiet flag."""
         mock_client.get.return_value = {"contacts": sample_contacts}
 
-        result = runner.invoke(main, ["contacts", "list", "--quiet"])
+        result = runner.invoke(main, ["--quiet", "contacts", "list"])
         assert result.exit_code == 0
         # Should only output IDs, one per line
         output_lines = result.output.strip().split("\n")
@@ -60,7 +60,7 @@ class TestContactCommands:
         """Test listing contacts in JSON format."""
         mock_client.get.return_value = {"contacts": sample_contacts}
 
-        result = runner.invoke(main, ["contacts", "list", "--json"])
+        result = runner.invoke(main, ["--json", "contacts", "list"])
         assert result.exit_code == 0
         import json
         data = json.loads(result.output)
@@ -71,7 +71,7 @@ class TestContactCommands:
         """Test listing contacts in CSV format."""
         mock_client.get.return_value = {"contacts": sample_contacts}
 
-        result = runner.invoke(main, ["contacts", "list", "--csv"])
+        result = runner.invoke(main, ["--csv", "contacts", "list"])
         assert result.exit_code == 0
         assert "ID," in result.output
         assert "First Name," in result.output
@@ -92,7 +92,7 @@ class TestContactCommands:
         """Test getting a contact in JSON format."""
         mock_client.get.return_value = {"contact": sample_contact}
 
-        result = runner.invoke(main, ["contacts", "get", "contact-123", "--json"])
+        result = runner.invoke(main, ["--json", "contacts", "get", "contact-123"])
         assert result.exit_code == 0
         import json
         data = json.loads(result.output)
@@ -163,7 +163,7 @@ class TestContactCommands:
         """Test creating a contact with --quiet flag."""
         mock_client.post.return_value = {"contact": sample_contact}
 
-        result = runner.invoke(main, ["contacts", "create", "--email", "test@example.com", "--quiet"])
+        result = runner.invoke(main, ["--quiet", "contacts", "create", "--email", "test@example.com"])
         assert result.exit_code == 0
         # Should only output the contact ID
         assert result.output.strip() == "contact-123"

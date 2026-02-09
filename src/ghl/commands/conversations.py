@@ -7,6 +7,7 @@ import click
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..config import config_manager
+from ..options import output_format_options
 from ..output import output_data, print_success
 
 CONVERSATION_COLUMNS = [
@@ -27,12 +28,14 @@ MESSAGE_COLUMNS = [
 
 
 @click.group()
+@output_format_options
 def conversations():
     """Manage conversations and messages."""
     pass
 
 
 @conversations.command("list")
+@output_format_options
 @click.option("--contact", "-c", "contact_id", help="Filter by contact ID")
 @click.option("--limit", "-l", default=20, help="Number of results")
 @click.pass_context
@@ -59,6 +62,7 @@ def list_conversations(ctx, contact_id: Optional[str], limit: int):
 
 
 @conversations.command("get")
+@output_format_options
 @click.argument("conversation_id")
 @click.pass_context
 def get_conversation(ctx, conversation_id: str):
@@ -84,6 +88,7 @@ def get_conversation(ctx, conversation_id: str):
 
 
 @conversations.command("messages")
+@output_format_options
 @click.argument("conversation_id")
 @click.option("--limit", "-l", default=20, help="Number of messages")
 @click.pass_context
@@ -108,6 +113,7 @@ def list_messages(ctx, conversation_id: str, limit: int):
 
 
 @conversations.command("send")
+@output_format_options
 @click.option("--contact", "-c", "contact_id", required=True, help="Contact ID")
 @click.option(
     "--type",
@@ -165,6 +171,7 @@ def send_message(
 
 
 @conversations.command("search")
+@output_format_options
 @click.argument("query")
 @click.option("--limit", "-l", default=20, help="Number of results")
 @click.pass_context
@@ -187,6 +194,7 @@ def search_conversations(ctx, query: str, limit: int):
 
 
 @conversations.command("create")
+@output_format_options
 @click.option("--contact", "-c", "contact_id", required=True, help="Contact ID")
 @click.pass_context
 def create_conversation(ctx, contact_id: str):

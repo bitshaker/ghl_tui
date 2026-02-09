@@ -5,6 +5,7 @@ import click
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..config import config_manager
+from ..options import output_format_options
 from ..output import output_data, print_success
 
 WORKFLOW_COLUMNS = [
@@ -16,12 +17,14 @@ WORKFLOW_COLUMNS = [
 
 
 @click.group()
+@output_format_options
 def workflows():
     """Manage workflows and automations."""
     pass
 
 
 @workflows.command("list")
+@output_format_options
 @click.pass_context
 def list_workflows(ctx):
     """List all workflows."""
@@ -42,6 +45,7 @@ def list_workflows(ctx):
 
 
 @workflows.command("get")
+@output_format_options
 @click.argument("workflow_id")
 @click.pass_context
 def get_workflow(ctx, workflow_id: str):

@@ -53,6 +53,11 @@ class GHLClient:
         self._client: Optional[httpx.Client] = None
 
     @property
+    def rate_limit_info(self) -> Optional[RateLimitInfo]:
+        """Latest rate limit info from API response headers (for TUI display)."""
+        return self._rate_limit_info
+
+    @property
     def client(self) -> httpx.Client:
         """Get or create the HTTP client."""
         if self._client is None:

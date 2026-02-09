@@ -5,7 +5,9 @@ import click
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..config import config_manager
+from ..options import output_format_options
 from ..output import output_data
+from ..services import pipelines as pipeline_svc
 
 PIPELINE_COLUMNS = [
     ("id", "ID"),
@@ -20,12 +22,14 @@ STAGE_COLUMNS = [
 
 
 @click.group()
+@output_format_options
 def pipelines():
     """Manage pipelines and stages."""
     pass
 
 
 @pipelines.command("list")
+@output_format_options
 @click.pass_context
 def list_pipelines(ctx):
     """List all pipelines."""
@@ -34,8 +38,7 @@ def list_pipelines(ctx):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get("/opportunities/pipelines")
-        pipelines_list = response.get("pipelines", [])
+        pipelines_list = pipeline_svc.list_pipelines(client)
 
         output_data(
             pipelines_list,
@@ -46,6 +49,7 @@ def list_pipelines(ctx):
 
 
 @pipelines.command("get")
+@output_format_options
 @click.argument("pipeline_id")
 @click.pass_context
 def get_pipeline(ctx, pipeline_id: str):
@@ -55,8 +59,7 @@ def get_pipeline(ctx, pipeline_id: str):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get(f"/opportunities/pipelines/{pipeline_id}")
-        pipeline = response.get("pipeline", response)
+        pipeline = pipeline_svc.get_pipeline(client, pipeline_id)
 
         if output_format == "json":
             output_data(pipeline, format="json")
@@ -68,7 +71,6 @@ def get_pipeline(ctx, pipeline_id: str):
             ]
             output_data(pipeline, format=output_format, single_fields=fields)
 
-            # Also display stages if available
             stages = pipeline.get("stages", [])
             if stages:
                 click.echo("\nStages:")
@@ -80,6 +82,7 @@ def get_pipeline(ctx, pipeline_id: str):
 
 
 @pipelines.command("stages")
+@output_format_options
 @click.argument("pipeline_id")
 @click.pass_context
 def list_stages(ctx, pipeline_id: str):
@@ -89,8 +92,7 @@ def list_stages(ctx, pipeline_id: str):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get(f"/opportunities/pipelines/{pipeline_id}")
-        pipeline = response.get("pipeline", response)
+        pipeline = pipeline_svc.get_pipeline(client, pipeline_id)
         stages = pipeline.get("stages", [])
 
         output_data(

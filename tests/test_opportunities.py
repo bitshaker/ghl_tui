@@ -94,6 +94,7 @@ class TestOpportunityCommands:
         result = runner.invoke(
             main,
             [
+                "--quiet",
                 "opportunities",
                 "create",
                 "--contact",
@@ -104,7 +105,6 @@ class TestOpportunityCommands:
                 "stage-123",
                 "--name",
                 "New Deal",
-                "--quiet",
             ],
         )
         assert result.exit_code == 0

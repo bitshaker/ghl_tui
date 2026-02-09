@@ -5,6 +5,7 @@ import click
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..config import config_manager
+from ..options import output_format_options
 from ..output import output_data
 
 USER_COLUMNS = [
@@ -30,12 +31,14 @@ USER_FIELDS = [
 
 
 @click.group()
+@output_format_options
 def users():
     """Manage users and team members."""
     pass
 
 
 @users.command("list")
+@output_format_options
 @click.option("--limit", "-l", default=20, help="Number of results")
 @click.pass_context
 def list_users(ctx, limit: int):
@@ -57,6 +60,7 @@ def list_users(ctx, limit: int):
 
 
 @users.command("get")
+@output_format_options
 @click.argument("user_id")
 @click.pass_context
 def get_user(ctx, user_id: str):
@@ -73,6 +77,7 @@ def get_user(ctx, user_id: str):
 
 
 @users.command("me")
+@output_format_options
 @click.pass_context
 def get_current_user(ctx):
     """Get the current authenticated user."""
@@ -87,6 +92,7 @@ def get_current_user(ctx):
 
 
 @users.command("search")
+@output_format_options
 @click.argument("query")
 @click.option("--limit", "-l", default=20, help="Number of results")
 @click.pass_context

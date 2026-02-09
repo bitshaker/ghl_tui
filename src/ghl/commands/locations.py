@@ -5,6 +5,7 @@ import click
 from ..auth import get_token
 from ..client import GHLClient
 from ..config import config_manager
+from ..options import output_format_options
 from ..output import output_data, print_success
 
 LOCATION_COLUMNS = [
@@ -32,12 +33,14 @@ LOCATION_FIELDS = [
 
 
 @click.group()
+@output_format_options
 def locations():
     """Manage locations (sub-accounts)."""
     pass
 
 
 @locations.command("list")
+@output_format_options
 @click.option("--company", "-c", "company_id", help="Filter by company/agency ID")
 @click.option("--limit", "-l", default=20, help="Number of results")
 @click.option("--skip", "-s", default=0, help="Number to skip")
@@ -65,6 +68,7 @@ def list_locations(ctx, company_id: str, limit: int, skip: int):
 
 
 @locations.command("get")
+@output_format_options
 @click.argument("location_id")
 @click.pass_context
 def get_location(ctx, location_id: str):
