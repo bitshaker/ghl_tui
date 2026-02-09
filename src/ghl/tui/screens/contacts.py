@@ -235,6 +235,7 @@ class ContactsView(Container):
         if self._contacts:
             lst.index = 0
             self.load_contact_detail(self._contacts[0]["id"])
+        lst.focus()
 
     def action_focus_search(self) -> None:
         self.query_one("#contacts-search", Input).focus()
