@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import httpx
 from pydantic import BaseModel
@@ -124,6 +124,9 @@ class GHLClient:
         json: Optional[dict] = None,
         files: Optional[dict] = None,
         max_retries: int = 3,
+        *,
+        include_location_id: bool = True,
+        location_param: Literal["locationId", "location_id"] = "locationId",
     ) -> dict[str, Any]:
         """
         Make an API request with automatic retry for rate limits.
@@ -135,6 +138,8 @@ class GHLClient:
             json: JSON body
             files: Files to upload
             max_retries: Maximum number of retries for rate limits
+            include_location_id: If True, add location to query params (set False for nested routes)
+            location_param: Key to use when adding location - "locationId" (contacts, etc.) or "location_id" (opportunities/search)
 
         Returns:
             Response JSON as dict
@@ -143,12 +148,12 @@ class GHLClient:
         if params:
             params = {k: v for k, v in params.items() if v is not None}
 
-        # Add location ID to params if available and not already present
-        if self.location_id and params is not None:
-            if "locationId" not in params:
-                params["locationId"] = self.location_id
-        elif self.location_id and params is None:
-            params = {"locationId": self.location_id}
+        # Add location to params if requested. Use the key the endpoint expects (contacts reject location_id).
+        if include_location_id and self.location_id:
+            if params is None:
+                params = {}
+            if location_param not in params:
+                params[location_param] = self.location_id
 
         for attempt in range(max_retries):
             try:
@@ -179,27 +184,92 @@ class GHLClient:
                     continue  # Retry after rate limit sleep
                 raise
 
-    def get(self, path: str, params: Optional[dict] = None) -> dict[str, Any]:
+    def get(
+        self,
+        path: str,
+        params: Optional[dict] = None,
+        *,
+        include_location_id: bool = True,
+        location_param: Literal["locationId", "location_id"] = "locationId",
+    ) -> dict[str, Any]:
         """Make a GET request."""
-        return self.request("GET", path, params=params)
+        return self.request(
+            "GET",
+            path,
+            params=params,
+            include_location_id=include_location_id,
+            location_param=location_param,
+        )
 
     def post(
-        self, path: str, json: Optional[dict] = None, files: Optional[dict] = None
+        self,
+        path: str,
+        json: Optional[dict] = None,
+        files: Optional[dict] = None,
+        *,
+        include_location_id: bool = True,
+        location_param: Literal["locationId", "location_id"] = "locationId",
     ) -> dict[str, Any]:
         """Make a POST request."""
-        return self.request("POST", path, json=json, files=files)
+        return self.request(
+            "POST",
+            path,
+            json=json,
+            files=files,
+            include_location_id=include_location_id,
+            location_param=location_param,
+        )
 
-    def put(self, path: str, json: Optional[dict] = None) -> dict[str, Any]:
+    def put(
+        self,
+        path: str,
+        json: Optional[dict] = None,
+        *,
+        include_location_id: bool = True,
+        location_param: Literal["locationId", "location_id"] = "locationId",
+    ) -> dict[str, Any]:
         """Make a PUT request."""
-        return self.request("PUT", path, json=json)
+        return self.request(
+            "PUT",
+            path,
+            json=json,
+            include_location_id=include_location_id,
+            location_param=location_param,
+        )
 
-    def delete(self, path: str, params: Optional[dict] = None) -> dict[str, Any]:
+    def delete(
+        self,
+        path: str,
+        params: Optional[dict] = None,
+        *,
+        include_location_id: bool = True,
+        location_param: Literal["locationId", "location_id"] = "locationId",
+    ) -> dict[str, Any]:
         """Make a DELETE request."""
-        return self.request("DELETE", path, params=params)
+        return self.request(
+            "DELETE",
+            path,
+            params=params,
+            include_location_id=include_location_id,
+            location_param=location_param,
+        )
 
-    def patch(self, path: str, json: Optional[dict] = None) -> dict[str, Any]:
+    def patch(
+        self,
+        path: str,
+        json: Optional[dict] = None,
+        *,
+        include_location_id: bool = True,
+        location_param: Literal["locationId", "location_id"] = "locationId",
+    ) -> dict[str, Any]:
         """Make a PATCH request."""
-        return self.request("PATCH", path, json=json)
+        return self.request(
+            "PATCH",
+            path,
+            json=json,
+            include_location_id=include_location_id,
+            location_param=location_param,
+        )
 
     def close(self) -> None:
         """Close the HTTP client."""

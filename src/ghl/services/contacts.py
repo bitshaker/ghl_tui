@@ -116,17 +116,25 @@ def remove_tag(client: "GHLClient", contact_id: str, tags: list[str]) -> None:
 
 def list_notes(client: "GHLClient", contact_id: str) -> list[dict]:
     """List notes for a contact."""
-    response = client.get(f"/contacts/{contact_id}/notes")
+    response = client.get(
+        f"/contacts/{contact_id}/notes", include_location_id=False
+    )
     return response.get("notes", [])
 
 
 def add_note(client: "GHLClient", contact_id: str, body: str) -> dict:
     """Add a note to a contact."""
-    response = client.post(f"/contacts/{contact_id}/notes", json={"body": body})
+    response = client.post(
+        f"/contacts/{contact_id}/notes",
+        json={"body": body},
+        include_location_id=False,
+    )
     return response.get("note", response)
 
 
 def list_tasks(client: "GHLClient", contact_id: str) -> list[dict]:
     """List tasks for a contact."""
-    response = client.get(f"/contacts/{contact_id}/tasks")
+    response = client.get(
+        f"/contacts/{contact_id}/tasks", include_location_id=False
+    )
     return response.get("tasks", [])

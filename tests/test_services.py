@@ -65,17 +65,19 @@ class TestOpportunitiesService:
         assert len(out) == 1
         mock_client.get.assert_called_once()
         assert "/opportunities/search" in mock_client.get.call_args[0][0]
-        assert mock_client.get.call_args[1]["params"]["limit"] == 5
 
     def test_list_opportunities_with_filters(self, mock_client):
-        mock_client.get.return_value = {"opportunities": []}
-        opp_svc.list_opportunities(
+        mock_client.get.return_value = {
+            "opportunities": [
+                {"id": "o1", "pipelineId": "p1", "pipelineStageId": "s1", "status": "open"},
+                {"id": "o2", "pipelineId": "other", "pipelineStageId": "s1", "status": "open"},
+            ]
+        }
+        out = opp_svc.list_opportunities(
             mock_client, pipeline_id="p1", stage_id="s1", status="open"
         )
-        params = mock_client.get.call_args[1]["params"]
-        assert params["pipelineId"] == "p1"
-        assert params["pipelineStageId"] == "s1"
-        assert params["status"] == "open"
+        assert len(out) == 1
+        assert out[0]["id"] == "o1"
 
     def test_move_opportunity(self, mock_client):
         mock_client.put.return_value = {"opportunity": {"id": "o1", "pipelineStageId": "s2"}}

@@ -179,7 +179,7 @@ class ContactsView(Container):
         lst = self.query_one("#contacts-list", ListView)
         lst.clear()
         for c in self._contacts:
-            lst.append(ListItem(_contact_label(c)))
+            lst.append(ListItem(Label(_contact_label(c))))
         if self._contacts:
             lst.index = 0
             self.load_contact_detail(self._contacts[0]["id"])

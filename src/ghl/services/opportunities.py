@@ -18,18 +18,32 @@ def list_opportunities(
     status: Optional[str] = None,
     contact_id: Optional[str] = None,
 ) -> list[dict]:
-    """List opportunities with optional filters."""
-    params: dict = {"limit": limit, "skip": skip}
-    if pipeline_id:
-        params["pipelineId"] = pipeline_id
-    if stage_id:
-        params["pipelineStageId"] = stage_id
-    if status:
-        params["status"] = status
-    if contact_id:
-        params["contactId"] = contact_id
-    response = client.get("/opportunities/search", params=params)
-    return response.get("opportunities", [])
+    """List opportunities with optional filters. Uses GET /opportunities/search (location only), then filters in Python."""
+    params: dict = {}
+    if client.location_id:
+        params["location_id"] = client.location_id
+    response = client.get(
+        "/opportunities/search",
+        params=params or None,
+        include_location_id=False,
+        location_param="location_id",
+    )
+    raw = response.get("opportunities", [])
+    if not isinstance(raw, list):
+        raw = [raw] if raw else []
+    # Filter by contact, pipeline, stage, status (API does not accept these on this endpoint)
+    out = []
+    for opp in raw:
+        if contact_id and opp.get("contactId") != contact_id:
+            continue
+        if pipeline_id and opp.get("pipelineId") != pipeline_id:
+            continue
+        if stage_id and opp.get("pipelineStageId") != stage_id:
+            continue
+        if status and (opp.get("status") or "").lower() != (status or "").lower():
+            continue
+        out.append(opp)
+    return out[skip : skip + limit]
 
 
 def get_opportunity(client: "GHLClient", opportunity_id: str) -> dict:
