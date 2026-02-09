@@ -60,7 +60,7 @@ class ContactDetail(Static):
             f"company: {contact.get('companyName') or '—'}",
             f"tags: {', '.join(contact.get('tags') or []) or '—'}",
             "",
-            "[dim]a[/] add tag  [dim]r[/] remove tag  [dim]N[/] notes  [dim]e[/] edit  [dim]o[/] opportunities",
+            "[dim]n[/] notes  [dim]N[/] new  [dim]a[/] add tag  [dim]r[/] remove tag  [dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh",
         ]
         self.update("\n".join(lines))
 
@@ -82,12 +82,13 @@ class ContactsView(Container):
     """Contacts browse, search, and detail panel."""
 
     BINDINGS = [
-        ("n", "new_contact", "New"),
+        ("n", "notes", "Notes"),
+        ("N", "new_contact", "New"),
         ("e", "edit_contact", "Edit"),
         ("a", "add_tag", "Add tag"),
         ("r", "remove_tag", "Remove tag"),
-        ("N", "notes", "Notes"),
         ("o", "opportunities", "Opportunities"),
+        ("R", "refresh_contacts", "Refresh"),
         ("/", "focus_search", "Search"),
     ]
 
@@ -187,6 +188,10 @@ class ContactsView(Container):
     def action_focus_search(self) -> None:
         self.query_one("#contacts-search", Input).focus()
 
+    def action_refresh_contacts(self) -> None:
+        """Reload the contacts list from the API."""
+        self.load_contacts()
+
     def action_new_contact(self) -> None:
         def on_done(data: dict | None) -> None:
             if data:
@@ -213,25 +218,43 @@ class ContactsView(Container):
         if not detail.contact_id:
             self.notify("Select a contact first", severity="warning")
             return
-        self.app.push_screen(AddTagModal(detail.contact_id))
+        cid = detail.contact_id
+
+        def on_done(_: object) -> None:
+            self.load_contact_detail(cid)
+        self.app.push_screen(AddTagModal(cid), on_done)
 
     def action_remove_tag(self) -> None:
         detail = self.query_one("#contact-detail", ContactDetail)
         if not detail.contact_id or not (detail.contact and (detail.contact.get("tags"))):
             self.notify("Select a contact with tags first", severity="warning")
             return
-        self.app.push_screen(RemoveTagModal(detail.contact_id, detail.contact.get("tags", [])))
+        cid = detail.contact_id
+        tags = detail.contact.get("tags", [])
+
+        def on_done(_: object) -> None:
+            self.load_contact_detail(cid)
+        self.app.push_screen(RemoveTagModal(cid, tags), on_done)
 
     def action_notes(self) -> None:
         detail = self.query_one("#contact-detail", ContactDetail)
         if not detail.contact_id:
             self.notify("Select a contact first", severity="warning")
             return
-        self.app.push_screen(ContactNotesModal(detail.contact_id))
+        cid = detail.contact_id
+        contact_name = _contact_label(detail.contact) if detail.contact else None
+
+        def on_done(_: object) -> None:
+            self.load_contact_detail(cid)
+        self.app.push_screen(ContactNotesModal(cid, contact_name=contact_name), on_done)
 
     def action_opportunities(self) -> None:
         detail = self.query_one("#contact-detail", ContactDetail)
         if not detail.contact_id:
             self.notify("Select a contact first", severity="warning")
             return
-        self.app.push_screen(ContactOpportunitiesModal(detail.contact_id))
+        cid = detail.contact_id
+
+        def on_done(_: object) -> None:
+            self.load_contact_detail(cid)
+        self.app.push_screen(ContactOpportunitiesModal(cid), on_done)

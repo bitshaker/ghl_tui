@@ -49,10 +49,9 @@ class RemoveTagModal(ModalScreen[None]):
     def compose(self):
         with Vertical():
             yield Label("Select tag to remove")
-            list_view = ListView(id="tag-list")
-            for t in self._tags:
-                list_view.append(ListItem(Label(t)))
-            yield list_view
+            with ListView(id="tag-list"):
+                for t in self._tags:
+                    yield ListItem(Label(t))
             yield Button("Remove selected", variant="primary", id="tag-remove")
             yield Button("Cancel", id="tag-cancel")
 

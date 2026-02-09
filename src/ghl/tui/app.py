@@ -9,6 +9,9 @@ class GHLTUIApp(App):
     """GHL TUI - Interactive interface for GoHighLevel API."""
 
     TITLE = "GHL TUI"
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+    ]
     CSS = """
     Screen {
         layout: vertical;
