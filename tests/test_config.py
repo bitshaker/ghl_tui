@@ -108,3 +108,43 @@ class TestConfigCommands:
         assert creds_file.exists()
         creds_data = json.loads(creds_file.read_text())
         assert creds_data["api_token"] == "test-token-456"
+
+    def test_profiles_add_list_use(self, runner, mock_config_dir):
+        """Test adding profiles, listing, and switching."""
+        result = runner.invoke(
+            main,
+            ["config", "profiles", "add", "work", "-t", "token-a", "-l", "loc-a"],
+        )
+        assert result.exit_code == 0
+        assert "work" in result.output and "active" in result.output
+
+        result = runner.invoke(main, ["config", "profiles", "add", "personal", "-t", "token-b", "-l", "loc-b"])
+        assert result.exit_code == 0
+
+        result = runner.invoke(main, ["config", "profiles", "list"])
+        assert result.exit_code == 0
+        assert "work" in result.output and "personal" in result.output
+
+        result = runner.invoke(main, ["config", "profiles", "use", "personal"])
+        assert result.exit_code == 0
+        assert "Switched to profile: personal" in result.output
+
+        result = runner.invoke(main, ["config", "show"])
+        assert result.exit_code == 0
+        assert "personal" in result.output
+
+    def test_profiles_use_unknown_fails(self, runner, mock_config_dir):
+        """Test that use with unknown profile fails."""
+        result = runner.invoke(main, ["config", "profiles", "use", "nonexistent"])
+        assert result.exit_code != 0
+        assert "does not exist" in result.output
+
+    def test_profiles_remove(self, runner, mock_config_dir):
+        """Test removing a profile."""
+        runner.invoke(main, ["config", "profiles", "add", "work", "-t", "t", "-l", "l"])
+        result = runner.invoke(main, ["config", "profiles", "remove", "work"], input="y\n")
+        assert result.exit_code == 0
+        assert "removed" in result.output
+        result = runner.invoke(main, ["config", "profiles", "list"])
+        assert result.exit_code == 0
+        assert "No profiles" in result.output

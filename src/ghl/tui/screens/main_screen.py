@@ -59,13 +59,13 @@ class MainScreen(Screen):
     }
     """
 
-    def __init__(self, location_id: str = "", **kwargs) -> None:
+    def __init__(self, location_label: str = "", **kwargs) -> None:
         super().__init__(**kwargs)
-        self._location_id = location_id
+        self._location_label = location_label or ""
         self._current_tab = "contacts"
 
     def compose(self):
-        yield HeaderBar(location_id=self._location_id, id="header_bar")
+        yield HeaderBar(location_label=self._location_label, id="header_bar")
         yield TabBar(active=self._current_tab, id="tab_bar")
         yield Container(id="content")
         yield Footer()

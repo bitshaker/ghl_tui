@@ -19,10 +19,11 @@ class GHLTUIApp(App):
     """
 
     def on_mount(self) -> None:
-        """Set up main screen with location from config."""
+        """Set up main screen with location label (profile name or location ID) from config."""
         from ghl.config import config_manager
-        location_id = config_manager.get_location_id() or ""
-        self.push_screen(MainScreen(location_id=location_id))
+        profile_name = config_manager.get_active_profile_name()
+        location_label = profile_name if profile_name else (config_manager.get_location_id() or "—")
+        self.push_screen(MainScreen(location_label=location_label))
 
 
 def run_tui() -> None:

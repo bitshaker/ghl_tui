@@ -9,7 +9,7 @@ from textual.widgets import Static
 
 
 class HeaderBar(Static):
-    """Shows app title, location ID, and API rate limit (remaining/limit, reset)."""
+    """Shows app title, location name (profile or ID), and API rate limit (remaining/limit, reset)."""
 
     DEFAULT_CSS = """
     HeaderBar {
@@ -22,17 +22,17 @@ class HeaderBar(Static):
 
     def __init__(
         self,
-        location_id: str = "",
+        location_label: str = "",
         *,
         id: str | None = "header_bar",
         **kwargs,
     ) -> None:
         super().__init__(id=id, **kwargs)
-        self._location_id = location_id or ""
+        self._location_label = location_label or ""
         self._rate_limit_info: Optional[object] = None
 
     def render(self) -> str:
-        loc = (self._location_id[:20] + "…") if len(self._location_id) > 20 else self._location_id or "—"
+        loc = (self._location_label[:20] + "…") if len(self._location_label) > 20 else self._location_label or "—"
         rate = "—"
         if self._rate_limit_info is not None and hasattr(self._rate_limit_info, "remaining"):
             rli = self._rate_limit_info
@@ -47,8 +47,9 @@ class HeaderBar(Static):
             rate = f"{remaining}/{limit}{reset_s}"
         return f" GHL TUI  │  Location: {loc}  │  Rate: {rate} "
 
-    def update_location(self, location_id: str) -> None:
-        self._location_id = location_id
+    def update_location(self, location_label: str) -> None:
+        """Update the displayed location name (e.g. profile name)."""
+        self._location_label = location_label or ""
         self.refresh()
 
     def update_rate_limit(self, rate_limit_info: Optional[object]) -> None:

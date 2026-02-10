@@ -20,16 +20,16 @@ def test_tui_app_imports():
 
 def test_header_bar_render():
     """HeaderBar renders without error."""
-    bar = HeaderBar(location_id="loc123")
+    bar = HeaderBar(location_label="work")
     bar._rate_limit_info = None
     text = bar.render()
     assert "GHL TUI" in text
-    assert "loc123" in text
+    assert "Location: work" in text
 
 
 def test_main_screen_compose():
     """MainScreen composes without error (no config/live API)."""
-    screen = MainScreen(location_id="test-loc")
+    screen = MainScreen(location_label="test-loc")
     children = list(screen.compose())
     assert len(children) >= 1
     # Should yield HeaderBar, TabBar, Container, Footer

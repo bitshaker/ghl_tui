@@ -9,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from ghl.cli import main
+from ghl.config import config_manager
 
 
 @pytest.fixture
@@ -27,7 +28,11 @@ def mock_config_dir(tmp_path, monkeypatch):
     monkeypatch.setattr("ghl.config.ConfigManager.CONFIG_DIR", config_dir)
     monkeypatch.setattr("ghl.config.ConfigManager.CONFIG_FILE", config_dir / "config.json")
     monkeypatch.setattr("ghl.config.ConfigManager.CREDENTIALS_FILE", config_dir / "credentials.json")
-    
+    monkeypatch.setattr("ghl.config.ConfigManager.PROFILES_FILE", config_dir / "profiles.json")
+    # Clear in-memory caches so this test sees only the patched paths
+    config_manager._profiles_data = None
+    config_manager._config = None
+
     return config_dir
 
 

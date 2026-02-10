@@ -23,6 +23,7 @@ from ...services import users as users_svc
 from ..contact_edit import ContactEditModal
 from ..contact_filter import ContactFilterModal, SavedSearchesModal
 from ..contact_notes import ContactNotesModal, format_note_date
+from ..text_utils import html_to_plain
 from ..contact_opportunities import ContactOpportunitiesModal
 from ..contact_tag import AddTagModal, RemoveTagModal
 from ..contact_tasks import ContactTasksModal, task_display_text
@@ -104,7 +105,7 @@ class ContactNotesPreview(Static):
             return
         lines = ["[bold]Notes[/bold]", ""]
         for i, n in enumerate(notes):
-            body = (n.get("body") or "").replace("\n", " ")
+            body = html_to_plain(n.get("body") or "").replace("\n", " ")
             date_str = format_note_date(n.get("dateAdded") or "")
             if date_str:
                 lines.append(f"[dim]{date_str}[/dim]")

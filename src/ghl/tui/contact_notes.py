@@ -11,6 +11,7 @@ from textual.widgets import Button, Label, RichLog, TextArea
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..services import contacts as contact_svc
+from .text_utils import html_to_plain
 
 
 def format_note_date(date_added: str) -> str:
@@ -65,7 +66,7 @@ class ContactNotesModal(ModalScreen[None]):
         log = self.query_one("#notes-log", RichLog)
         log.clear()
         for i, n in enumerate(notes):
-            body = n.get("body") or ""
+            body = html_to_plain(n.get("body") or "")
             date_str = format_note_date(n.get("dateAdded") or "")
             if date_str:
                 log.write(f"[dim]{date_str}[/dim]\n{body}")
