@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, ListItem, ListView, Static, TextArea
 
@@ -81,6 +81,9 @@ class ContactTasksModal(ModalScreen[None]):
         height: auto;
         padding: 0 0 1 0;
     }
+    #task-buttons Button {
+        margin-right: 2;
+    }
     """
 
     def __init__(self, contact_id: str, contact_name: str | None = None, **kwargs) -> None:
@@ -105,7 +108,7 @@ class ContactTasksModal(ModalScreen[None]):
                 id="task-due",
             )
             yield Static("", id="task-actions")
-            with Vertical(id="task-buttons"):
+            with Horizontal(id="task-buttons"):
                 yield Button("Add task", id="task-add")
                 yield Button("Toggle complete", id="task-complete")
                 yield Button("Delete task", id="task-delete")

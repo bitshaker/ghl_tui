@@ -3,6 +3,7 @@
 from .contacts import (
     add_note,
     add_tag,
+    contacts_search,
     create_contact,
     delete_contact,
     get_contact,
@@ -13,6 +14,7 @@ from .contacts import (
     search_contacts,
     update_contact,
 )
+from .users import list_users
 from .opportunities import (
     create_opportunity,
     delete_opportunity,
@@ -28,9 +30,11 @@ from .pipelines import get_pipeline, list_pipelines, list_stages
 __all__ = [
     "add_note",
     "add_tag",
+    "contacts_search",
     "create_contact",
     "delete_contact",
     "get_contact",
+    "list_users",
     "get_pipeline",
     "get_opportunity",
     "list_contacts",

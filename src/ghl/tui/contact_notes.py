@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, RichLog, TextArea
 
@@ -34,6 +34,9 @@ class ContactNotesModal(ModalScreen[None]):
     #note-input {
         height: 6;
     }
+    #notes-buttons Button {
+        margin-right: 2;
+    }
     """
 
     def __init__(self, contact_id: str, contact_name: str | None = None, **kwargs) -> None:
@@ -49,8 +52,9 @@ class ContactNotesModal(ModalScreen[None]):
                 yield Label("Notes", id="notes-title")
             yield RichLog(id="notes-log", highlight=True, markup=True)
             yield TextArea(id="note-input")
-            yield Button("Add note", id="note-add")
-            yield Button("Close", id="notes-close")
+            with Horizontal(id="notes-buttons"):
+                yield Button("Add note", id="note-add")
+                yield Button("Close", id="notes-close")
 
     def on_mount(self) -> None:
         self._load_notes()

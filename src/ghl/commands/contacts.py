@@ -9,6 +9,7 @@ from ..client import GHLClient
 from ..config import config_manager
 from ..options import output_format_options
 from ..output import output_data, print_success
+from ..saved_searches import list_saved_searches
 from ..services import contacts as contact_svc
 
 # Column definitions for contact list
@@ -51,16 +52,29 @@ def contacts():
 @contacts.command("list")
 @output_format_options
 @click.option("--limit", "-l", default=20, help="Number of contacts to return")
-@click.option("--query", "-q", help="Search query")
+@click.option("--query", "-q", help="Search query (name, email, etc.)")
+@click.option("--tag", "-t", "tags", multiple=True, help="Filter by tag (contacts must have this tag); can repeat")
+@click.option("--assigned-to", help="Filter by assigned user ID")
 @click.pass_context
-def list_contacts(ctx, limit: int, query: Optional[str]):
-    """List contacts in the location."""
+def list_contacts(ctx, limit: int, query: Optional[str], tags: tuple, assigned_to: Optional[str]):
+    """List contacts in the location. Use --tag and --assigned-to for filtered search (Search API)."""
     token = get_token()
     location_id = get_location_id()
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        contacts_list = contact_svc.list_contacts(client, limit=limit, query=query)
+        tag_list = list(tags) if tags else None
+        if tag_list or assigned_to:
+            contacts_list = contact_svc.contacts_search(
+                client,
+                location_id,
+                page_limit=limit,
+                query=query,
+                tags=tag_list,
+                assigned_to=assigned_to,
+            )
+        else:
+            contacts_list = contact_svc.list_contacts(client, limit=limit, query=query)
 
         output_data(
             contacts_list,
@@ -273,6 +287,33 @@ def list_tasks(ctx, contact_id: str):
             format=output_format,
             title=f"Tasks for Contact {contact_id}",
         )
+
+
+@contacts.command("saved-searches")
+@output_format_options
+@click.pass_context
+def list_saved_searches_cmd(ctx):
+    """List locally saved contact search filters (tags, assigned user, query)."""
+    output_format = ctx.obj.get("output_format") or config_manager.config.output_format
+    searches = list_saved_searches()
+    if not searches:
+        click.echo("No saved searches. Use the TUI (f = Filter, then Save as search) to create them.")
+        return
+    rows = [
+        {
+            "name": s.get("name", ""),
+            "tags": ", ".join(s.get("tags") or []),
+            "assignedTo": s.get("assignedTo") or "—",
+            "query": s.get("query") or "—",
+        }
+        for s in searches
+    ]
+    output_data(
+        rows,
+        columns=[("name", "Name"), ("tags", "Tags"), ("assignedTo", "Assigned To"), ("query", "Query")],
+        format=output_format,
+        title="Saved searches",
+    )
 
 
 @contacts.command("notes")

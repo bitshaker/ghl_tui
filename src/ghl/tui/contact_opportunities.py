@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, ListView, ListItem, Static
 
@@ -14,6 +14,12 @@ from ..services.opportunities import list_opportunities
 class ContactOpportunitiesModal(ModalScreen[None]):
     """Show opportunities for the current contact."""
 
+    CSS = """
+    #opps-buttons Button {
+        margin-right: 2;
+    }
+    """
+
     def __init__(self, contact_id: str, **kwargs) -> None:
         super().__init__(**kwargs)
         self._contact_id = contact_id
@@ -23,7 +29,8 @@ class ContactOpportunitiesModal(ModalScreen[None]):
             yield Label("Opportunities for this contact")
             yield ListView(id="contact-opps-list")
             yield Static("", id="contact-opps-empty")
-            yield Button("Close", id="opps-close")
+            with Horizontal(id="opps-buttons"):
+                yield Button("Close", id="opps-close")
 
     def on_mount(self) -> None:
         with GHLClient(get_token(), get_location_id()) as client:

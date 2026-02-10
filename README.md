@@ -78,6 +78,10 @@ ghl config clear --all        # Clear all configuration
 ```bash
 ghl contacts list                         # List contacts
 ghl contacts list --limit 50              # List with custom limit
+ghl contacts list --tag "VIP" --tag "Lead"        # Filter by tags (Search API)
+ghl contacts list --assigned-to USER_ID           # Filter by assigned user
+ghl contacts list -q "john" --tag "Lead"          # Query + tag filter
+ghl contacts saved-searches               # List locally saved search filters
 ghl contacts get CONTACT_ID               # Get contact details
 ghl contacts create --email "a@b.com"     # Create contact
 ghl contacts update CONTACT_ID --phone "+1234"    # Update contact
@@ -89,6 +93,8 @@ ghl contacts notes CONTACT_ID                     # List contact notes
 ghl contacts add-note CONTACT_ID "Note text"      # Add note to contact
 ghl contacts tasks CONTACT_ID                     # List contact tasks
 ```
+
+Contact list can use the **Contacts Search API** when you pass `--tag` or `--assigned-to`: results are filtered by tags (AND) and/or assigned user. Saved searches are stored in `~/.ghl_tui/saved_searches.json`. In the TUI: **f** = Filter (tags, assigned user, text query; apply or save as search), **s** = Saved searches (pick a saved filter or "All contacts").
 
 ### Calendars & Appointments
 

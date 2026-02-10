@@ -99,6 +99,47 @@ def search_contacts(client: "GHLClient", query: str, limit: int = 20) -> list[di
     return response.get("contacts", [])
 
 
+def contacts_search(
+    client: "GHLClient",
+    location_id: str,
+    *,
+    page: int = 1,
+    page_limit: int = 50,
+    query: Optional[str] = None,
+    tags: Optional[list[str]] = None,
+    assigned_to: Optional[str] = None,
+) -> list[dict]:
+    """
+    Search contacts via POST /contacts/search with filters.
+    Supports filter by tags (contains, AND across multiple) and assignedTo (eq).
+    """
+    filters: list[dict] = []
+    if assigned_to:
+        filters.append({"field": "assignedTo", "operator": "eq", "value": assigned_to})
+    if tags:
+        for tag in tags:
+            tag = (tag or "").strip()
+            if tag:
+                filters.append({"field": "tags", "operator": "contains", "value": tag})
+
+    body: dict = {
+        "locationId": location_id,
+        "page": page,
+        "pageLimit": page_limit,
+    }
+    if query:
+        body["query"] = query.strip()
+    if filters:
+        body["filters"] = [{"group": "AND", "filters": filters}]
+
+    response = client.post(
+        "/contacts/search",
+        json=body,
+        include_location_id=False,
+    )
+    return response.get("contacts", [])
+
+
 def add_tag(client: "GHLClient", contact_id: str, tags: list[str]) -> None:
     """Add tags to a contact (merges with existing)."""
     contact = get_contact(client, contact_id)

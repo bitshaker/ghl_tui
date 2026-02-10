@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from textual import work
 from textual.containers import Container, Horizontal, Vertical
@@ -19,7 +19,9 @@ from textual.worker import Worker, WorkerState
 from ...auth import get_location_id, get_token
 from ...client import GHLClient
 from ...services import contacts as contact_svc
+from ...services import users as users_svc
 from ..contact_edit import ContactEditModal
+from ..contact_filter import ContactFilterModal, SavedSearchesModal
 from ..contact_notes import ContactNotesModal, format_note_date
 from ..contact_opportunities import ContactOpportunitiesModal
 from ..contact_tag import AddTagModal, RemoveTagModal
@@ -163,6 +165,8 @@ class ContactsView(Container):
         ("o", "opportunities", "Opportunities"),
         ("R", "refresh_contacts", "Refresh"),
         ("/", "focus_search", "Search"),
+        ("f", "filter_contacts", "Filter"),
+        ("s", "saved_searches", "Saved"),
     ]
 
     DEFAULT_CSS = """
@@ -192,10 +196,13 @@ class ContactsView(Container):
         super().__init__(**kwargs)
         self._contacts: list[dict] = []
         self._selected_index: int = 0
+        self._current_filter: dict[str, Any] = {}
+        self._saved_search_name: Optional[str] = None
 
     def compose(self):
         with Vertical(id="contacts-left"):
             yield Input(placeholder="Search contacts…", id="contacts-search")
+            yield Static("", id="contacts-filter-label")
             yield ListView(id="contacts-list")
         with Vertical(id="contacts-right"):
             yield ContactDetail(id="contact-detail")
@@ -203,6 +210,7 @@ class ContactsView(Container):
             yield ContactNotesPreview(id="contact-notes-preview")
 
     def on_mount(self) -> None:
+        self._update_filter_label()
         self.load_contacts()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
@@ -213,12 +221,55 @@ class ContactsView(Container):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "contacts-search":
-            self.load_contacts(query=event.value or None)
+            self.load_contacts()
+
+    def _filter_label(self) -> str:
+        if self._saved_search_name:
+            return f"[dim]Saved: {self._saved_search_name}[/dim]"
+        f = self._current_filter
+        parts = []
+        if f.get("tags"):
+            parts.append(f"tags: {', '.join(f['tags'])}")
+        if f.get("assignedTo"):
+            parts.append("assigned")
+        if f.get("query"):
+            parts.append(f"q: {f['query']}")
+        if not parts:
+            return ""
+        return "[dim]" + " | ".join(parts) + "[/dim]"
+
+    def _update_filter_label(self) -> None:
+        try:
+            self.query_one("#contacts-filter-label", Static).update(self._filter_label())
+        except Exception:
+            pass
 
     @work(thread=True)
-    def load_contacts(self, query: Optional[str] = None) -> tuple[list[dict], object]:
-        with GHLClient(get_token(), get_location_id()) as client:
-            contacts = contact_svc.list_contacts(client, limit=50, query=query)
+    def load_contacts(self, query_override: Optional[str] = None) -> tuple[list[dict], object]:
+        location_id = get_location_id()
+        with GHLClient(get_token(), location_id) as client:
+            query = query_override
+            if query is None:
+                try:
+                    inp = self.query_one("#contacts-search", Input)
+                    query = (inp.value or "").strip() or None
+                except Exception:
+                    pass
+            if query is None and self._current_filter:
+                query = self._current_filter.get("query")
+            tags = self._current_filter.get("tags") or []
+            assigned_to = self._current_filter.get("assignedTo")
+            if tags or assigned_to:
+                contacts = contact_svc.contacts_search(
+                    client,
+                    location_id,
+                    page_limit=50,
+                    query=query,
+                    tags=tags if tags else None,
+                    assigned_to=assigned_to,
+                )
+            else:
+                contacts = contact_svc.list_contacts(client, limit=50, query=query)
             rli = client.rate_limit_info
             return (contacts, rli)
 
@@ -282,6 +333,39 @@ class ContactsView(Container):
     def action_refresh_contacts(self) -> None:
         """Reload the contacts list from the API."""
         self.load_contacts()
+
+    def _apply_filter_result(self, result: Any) -> None:
+        if result is None:
+            return
+        if isinstance(result, tuple) and len(result) == 2:
+            self._current_filter = result[0] or {}
+            self._saved_search_name = result[1]
+        else:
+            self._current_filter = result or {}
+            self._saved_search_name = None
+        self._update_filter_label()
+        self.load_contacts()
+
+    def action_filter_contacts(self) -> None:
+        """Open filter modal; on apply/save set filter and reload."""
+        try:
+            with GHLClient(get_token(), get_location_id()) as client:
+                users = users_svc.list_users(client)
+        except Exception as e:
+            self.notify(f"Could not load users: {e}", severity="error")
+            users = []
+        def on_done(res: Any) -> None:
+            self._apply_filter_result(res)
+        self.app.push_screen(
+            ContactFilterModal(users=users or [], current_filter=self._current_filter),
+            on_done,
+        )
+
+    def action_saved_searches(self) -> None:
+        """Open saved searches modal; on select set filter and reload."""
+        def on_done(result: Any) -> None:
+            self._apply_filter_result(result)
+        self.app.push_screen(SavedSearchesModal(), on_done)
 
     def action_new_contact(self) -> None:
         def on_done(data: dict | None) -> None:

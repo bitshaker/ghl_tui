@@ -56,3 +56,8 @@ select = ["E", "F", "I", "W"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.basedpyright]
+# Use .venv at project root so third-party imports (e.g. textual) resolve
+venvPath = "."
+venv = ".venv"

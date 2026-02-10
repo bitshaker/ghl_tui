@@ -7,6 +7,7 @@ from ..client import GHLClient
 from ..config import config_manager
 from ..options import output_format_options
 from ..output import output_data
+from ..services import users as users_svc
 
 USER_COLUMNS = [
     ("id", "ID"),
@@ -39,16 +40,15 @@ def users():
 
 @users.command("list")
 @output_format_options
-@click.option("--limit", "-l", default=20, help="Number of results")
 @click.pass_context
-def list_users(ctx, limit: int):
-    """List users in the location."""
+def list_users(ctx):
+    """List users in the location (GET /users/ with locationId)."""
     token = get_token()
     location_id = get_location_id()
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get("/users/", params={"limit": limit})
+        response = client.get("/users/")
         users_list = response.get("users", [])
 
         output_data(
@@ -94,17 +94,15 @@ def get_current_user(ctx):
 @users.command("search")
 @output_format_options
 @click.argument("query")
-@click.option("--limit", "-l", default=20, help="Number of results")
 @click.pass_context
-def search_users(ctx, query: str, limit: int):
-    """Search for users by name or email."""
+def search_users_cmd(ctx, query: str):
+    """Search for users by name or email (list + filter; works with location auth)."""
     token = get_token()
     location_id = get_location_id()
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get("/users/search", params={"query": query, "limit": limit})
-        users_list = response.get("users", [])
+        users_list = users_svc.search_users(client, query)
 
         output_data(
             users_list,
