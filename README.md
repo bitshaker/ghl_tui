@@ -80,14 +80,14 @@ ghl contacts list                         # List contacts
 ghl contacts list --limit 50              # List with custom limit
 ghl contacts get CONTACT_ID               # Get contact details
 ghl contacts create --email "a@b.com"     # Create contact
-ghl contacts update ID --phone "+1234"    # Update contact
-ghl contacts delete ID                    # Delete contact
+ghl contacts update CONTACT_ID --phone "+1234"    # Update contact
+ghl contacts delete CONTACT_ID                    # Delete contact
 ghl contacts search "query"               # Search contacts
-ghl contacts tag ID --tag "VIP"           # Add tag to contact
-ghl contacts untag ID --tag "VIP"         # Remove tag from contact
-ghl contacts notes ID                     # List contact notes
-ghl contacts add-note ID "Note text"      # Add note to contact
-ghl contacts tasks ID                     # List contact tasks
+ghl contacts tag CONTACT_ID --tag "VIP"           # Add tag to contact
+ghl contacts untag CONTACT_ID --tag "VIP"         # Remove tag from contact
+ghl contacts notes CONTACT_ID                     # List contact notes
+ghl contacts add-note CONTACT_ID "Note text"      # Add note to contact
+ghl contacts tasks CONTACT_ID                     # List contact tasks
 ```
 
 ### Calendars & Appointments

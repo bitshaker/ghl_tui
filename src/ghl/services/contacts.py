@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone, timedelta
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -138,3 +139,92 @@ def list_tasks(client: "GHLClient", contact_id: str) -> list[dict]:
         f"/contacts/{contact_id}/tasks", include_location_id=False
     )
     return response.get("tasks", [])
+
+
+def create_task(
+    client: "GHLClient",
+    contact_id: str,
+    title: str,
+    *,
+    body: Optional[str] = None,
+    due_date: Optional[str] = None,
+    completed: bool = False,
+    assigned_to: Optional[str] = None,
+) -> dict:
+    """Create a task for a contact.
+    GHL API requires title, dueDate (ISO 8601), and completed.
+    """
+    # dueDate is required; default to 7 days from now at noon UTC
+    if due_date:
+        due_date_str = due_date
+    else:
+        default_due = datetime.now(timezone.utc) + timedelta(days=7)
+        due_date_str = default_due.strftime("%Y-%m-%dT12:00:00Z")
+    data: dict = {
+        "title": title,
+        "dueDate": due_date_str,
+        "completed": completed,
+    }
+    if body is not None:
+        data["body"] = body
+    if assigned_to is not None:
+        data["assignedTo"] = assigned_to
+    response = client.post(
+        f"/contacts/{contact_id}/tasks",
+        json=data,
+        include_location_id=False,
+    )
+    return response.get("task", response)
+
+
+def update_task(
+    client: "GHLClient",
+    contact_id: str,
+    task_id: str,
+    *,
+    title: Optional[str] = None,
+    due_date: Optional[str] = None,
+) -> dict:
+    """Update a task."""
+    data: dict = {}
+    if title is not None:
+        data["title"] = title
+    if due_date is not None:
+        data["dueDate"] = due_date
+    if not data:
+        return get_task(client, contact_id, task_id)
+    response = client.put(
+        f"/contacts/{contact_id}/tasks/{task_id}",
+        json=data,
+        include_location_id=False,
+    )
+    return response.get("task", response)
+
+
+def get_task(client: "GHLClient", contact_id: str, task_id: str) -> dict:
+    """Get a single task by ID."""
+    response = client.get(
+        f"/contacts/{contact_id}/tasks/{task_id}",
+        include_location_id=False,
+    )
+    return response.get("task", response)
+
+
+def delete_task(client: "GHLClient", contact_id: str, task_id: str) -> None:
+    """Delete a task."""
+    client.delete(
+        f"/contacts/{contact_id}/tasks/{task_id}",
+        include_location_id=False,
+    )
+
+
+def update_task_completed(
+    client: "GHLClient", contact_id: str, task_id: str, completed: bool
+) -> dict:
+    """Mark a task as completed or incomplete."""
+    response = client.put(
+        f"/contacts/{contact_id}/tasks/{task_id}/completed",
+        json={"completed": completed},
+        include_location_id=False,
+    )
+    return response.get("task", response)

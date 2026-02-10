@@ -23,6 +23,7 @@ from ..contact_edit import ContactEditModal
 from ..contact_notes import ContactNotesModal, format_note_date
 from ..contact_opportunities import ContactOpportunitiesModal
 from ..contact_tag import AddTagModal, RemoveTagModal
+from ..contact_tasks import ContactTasksModal, task_display_text
 
 
 def _contact_label(c: dict) -> str:
@@ -60,7 +61,7 @@ class ContactDetail(Static):
             f"company: {contact.get('companyName') or '—'}",
             f"tags: {', '.join(contact.get('tags') or []) or '—'}",
             "",
-            "[dim]n[/] notes  [dim]N[/] new  [dim]a[/] add tag  [dim]r[/] remove tag  [dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh",
+            "[dim]n[/] notes  [dim]t[/] tasks  [dim]N[/] new  [dim]a[/] add tag  [dim]r[/] remove tag  [dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh",
         ]
         self.update("\n".join(lines))
 
@@ -116,11 +117,45 @@ class ContactNotesPreview(Static):
         self.update("")
 
 
+class ContactTasksPreview(Static):
+    """Shows a preview of tasks for the selected contact below the detail."""
+
+    DEFAULT_CSS = """
+    ContactTasksPreview {
+        width: 1fr;
+        padding: 1 2;
+        border: solid $primary-darken-2;
+        border-top: none;
+        background: $surface-darken-2;
+        height: auto;
+        max-height: 10;
+        overflow-y: auto;
+    }
+    """
+
+    def show_tasks(self, tasks: list[dict]) -> None:
+        """Update content with the given tasks."""
+        if not tasks:
+            self.update("[dim]No tasks. Press t to manage.[/dim]")
+            return
+        lines = ["[bold]Tasks[/bold]", ""]
+        for i, t in enumerate(tasks):
+            lines.append(task_display_text(t))
+            if i < len(tasks) - 1:
+                lines.append("[dim]─────────────────────────────[/dim]")
+        self.update("\n".join(lines))
+
+    def clear_tasks(self) -> None:
+        """Clear the tasks preview (no contact selected)."""
+        self.update("")
+
+
 class ContactsView(Container):
     """Contacts browse, search, and detail panel."""
 
     BINDINGS = [
         ("n", "notes", "Notes"),
+        ("t", "tasks", "Tasks"),
         ("N", "new_contact", "New"),
         ("e", "edit_contact", "Edit"),
         ("a", "add_tag", "Add tag"),
@@ -164,6 +199,7 @@ class ContactsView(Container):
             yield ListView(id="contacts-list")
         with Vertical(id="contacts-right"):
             yield ContactDetail(id="contact-detail")
+            yield ContactTasksPreview(id="contact-tasks-preview")
             yield ContactNotesPreview(id="contact-notes-preview")
 
     def on_mount(self) -> None:
@@ -187,12 +223,13 @@ class ContactsView(Container):
             return (contacts, rli)
 
     @work(thread=True)
-    def load_contact_detail(self, contact_id: str) -> tuple[dict, list[dict], object]:
+    def load_contact_detail(self, contact_id: str) -> tuple[dict, list[dict], list[dict], object]:
         with GHLClient(get_token(), get_location_id()) as client:
             contact = contact_svc.get_contact(client, contact_id)
             notes = contact_svc.list_notes(client, contact_id)
+            tasks = contact_svc.list_tasks(client, contact_id)
             rli = client.rate_limit_info
-            return (contact, notes, rli)
+            return (contact, notes, tasks, rli)
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.state != WorkerState.SUCCESS or not event.worker.result:
@@ -203,8 +240,8 @@ class ContactsView(Container):
         except Exception:
             pass
         result = event.worker.result
-        if isinstance(result, tuple) and len(result) == 3:
-            contact, notes, rli = result
+        if isinstance(result, tuple) and len(result) == 4:
+            contact, notes, tasks, rli = result
             try:
                 header = self.screen.query_one("#header_bar")
                 header.update_rate_limit(rli)
@@ -212,6 +249,7 @@ class ContactsView(Container):
                 pass
             if isinstance(contact, dict) and contact.get("id"):
                 self.query_one("#contact-detail", ContactDetail).show_contact(contact)
+                self.query_one("#contact-tasks-preview", ContactTasksPreview).show_tasks(tasks)
                 self.query_one("#contact-notes-preview", ContactNotesPreview).show_notes(notes)
         elif isinstance(result, tuple) and len(result) == 2:
             data, rli = result
@@ -224,6 +262,7 @@ class ContactsView(Container):
                 self._contacts = data
                 if not self._contacts:
                     self.query_one("#contact-detail", ContactDetail).clear_contact()
+                    self.query_one("#contact-tasks-preview", ContactTasksPreview).clear_tasks()
                     self.query_one("#contact-notes-preview", ContactNotesPreview).clear_notes()
                 self._refresh_list()
 
@@ -299,6 +338,18 @@ class ContactsView(Container):
         def on_done(_: object) -> None:
             self.load_contact_detail(cid)
         self.app.push_screen(ContactNotesModal(cid, contact_name=contact_name), on_done)
+
+    def action_tasks(self) -> None:
+        detail = self.query_one("#contact-detail", ContactDetail)
+        if not detail.contact_id:
+            self.notify("Select a contact first", severity="warning")
+            return
+        cid = detail.contact_id
+        contact_name = _contact_label(detail.contact) if detail.contact else None
+
+        def on_done(_: object) -> None:
+            self.load_contact_detail(cid)
+        self.app.push_screen(ContactTasksModal(cid, contact_name=contact_name), on_done)
 
     def action_opportunities(self) -> None:
         detail = self.query_one("#contact-detail", ContactDetail)

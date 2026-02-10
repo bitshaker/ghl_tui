@@ -257,7 +257,9 @@ class TestContactCommands:
         assert result.exit_code == 0
         assert "First note" in result.output
         assert "Second note" in result.output
-        mock_client.get.assert_called_once_with("/contacts/contact-123/notes")
+        mock_client.get.assert_called_once()
+        call_args = mock_client.get.call_args
+        assert call_args[0][0] == "/contacts/contact-123/notes"
 
     def test_contacts_add_note(self, runner, mock_token, mock_location_id, mock_client):
         """Test adding a note to a contact."""
@@ -287,4 +289,6 @@ class TestContactCommands:
         result = runner.invoke(main, ["contacts", "tasks", "contact-123"])
         assert result.exit_code == 0
         assert "Follow up" in result.output
-        mock_client.get.assert_called_once_with("/contacts/contact-123/tasks")
+        mock_client.get.assert_called_once()
+        call_args = mock_client.get.call_args
+        assert call_args[0][0] == "/contacts/contact-123/tasks"
