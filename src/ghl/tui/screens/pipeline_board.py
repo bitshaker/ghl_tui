@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from textual import work
+from textual import on, work
+from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.widgets import (
     Button,
@@ -14,6 +15,16 @@ from textual.widgets import (
     Select,
     Static,
 )
+
+
+class OpportunityListView(ListView):
+    """ListView for opportunities that shows Enter=View in the footer."""
+
+    BINDINGS = [
+        Binding("enter", "select_cursor", "View"),
+        Binding("up", "cursor_up", "Cursor up", show=False),
+        Binding("down", "cursor_down", "Cursor down", show=False),
+    ]
 from textual.worker import Worker, WorkerState
 
 from ...auth import get_location_id, get_token
@@ -61,10 +72,15 @@ class StageColumn(Container):
 
     def compose(self):
         yield Static(self.stage_name, classes="stage-header")
-        lst = ListView(id="stage-opps")
-        for opp in self.opportunities:
-            lst.append(ListItem(Static(_opp_label(opp))))
-        yield lst
+        items = [ListItem(Static(_opp_label(opp))) for opp in self.opportunities]
+        yield OpportunityListView(*items, id="stage-opps")
+
+    @on(ListView.Selected)
+    def on_opportunity_selected(self, event: ListView.Selected) -> None:
+        """Open opportunity detail when user presses Enter on an opportunity."""
+        idx = event.index
+        if 0 <= idx < len(self.opportunities):
+            self.app.push_screen(OpportunityDetailModal(self.opportunities[idx]["id"]))
 
 
 class PipelineBoardView(Container):
@@ -74,7 +90,6 @@ class PipelineBoardView(Container):
         ("m", "move_opportunity", "Move"),
         ("w", "mark_won", "Won"),
         ("l", "mark_lost", "Lost"),
-        ("enter", "view_opportunity", "View"),
     ]
 
     DEFAULT_CSS = """
@@ -138,8 +153,11 @@ class PipelineBoardView(Container):
         pipeline_id = self._pipeline_id
         if not pipeline_id:
             return ({}, None)
+        # Use pipeline from list (get_pipeline requires scope that often isn't granted)
+        pipeline = next((p for p in self._pipelines if p.get("id") == pipeline_id), None)
+        if not pipeline:
+            return ({}, None)
         with GHLClient(get_token(), get_location_id()) as client:
-            pipeline = pipeline_svc.get_pipeline(client, pipeline_id)
             opps = opp_svc.list_opportunities(
                 client, pipeline_id=pipeline_id, limit=100, status="open"
             )
@@ -172,6 +190,14 @@ class PipelineBoardView(Container):
             self._pipeline = data["pipeline"]
             self._stages = self._pipeline.get("stages", [])
             opps = data.get("opportunities", [])
+            # List API may not include stages; derive from opportunities if needed
+            if not self._stages and opps:
+                seen: dict[str, str] = {}
+                for o in opps:
+                    sid = o.get("pipelineStageId")
+                    if sid and sid not in seen:
+                        seen[sid] = o.get("pipelineStageName") or sid[:8]
+                self._stages = [{"id": k, "name": v} for k, v in seen.items()]
             self._all_opportunities = opps
             by_stage: dict[str, list[dict]] = {s["id"]: [] for s in self._stages}
             for o in opps:
@@ -179,11 +205,11 @@ class PipelineBoardView(Container):
                 if sid and sid in by_stage:
                     by_stage[sid].append(o)
             self._opportunities_by_stage = by_stage
-            self._render_columns()
+            self.call_later(self._render_columns)
 
-    def _render_columns(self) -> None:
+    async def _render_columns(self) -> None:
         container = self.query_one("#board-columns", ScrollableContainer)
-        container.remove_children()
+        await container.remove_children()
         for stage in self._stages:
             sid = stage.get("id", "")
             name = stage.get("name", "—")
@@ -196,21 +222,14 @@ class PipelineBoardView(Container):
         if focused is None:
             return None
         for col in self.query("StageColumn"):
-            if focused in list(col.descendants):
-                lst = col.query_one("#stage-opps", ListView)
+            if focused in col.query("*"):
+                lst = col.query_one("#stage-opps", OpportunityListView)
                 idx = lst.index
                 opps = getattr(col, "opportunities", [])
                 if 0 <= idx < len(opps):
                     return opps[idx]
                 break
         return None
-
-    def action_view_opportunity(self) -> None:
-        opp = self._get_selected_opportunity()
-        if not opp:
-            self.notify("Select an opportunity (navigate list then Enter)", severity="warning")
-            return
-        self.app.push_screen(OpportunityDetailModal(opp["id"]))
 
     def action_move_opportunity(self) -> None:
         opp = self._get_selected_opportunity()
@@ -221,6 +240,7 @@ class PipelineBoardView(Container):
         stage_names = [s["name"] for s in self._stages]
         def on_done(_: None) -> None:
             self.load_board()
+            self.set_timer(3, self.load_board, name="refresh-after-move")  # Refresh again after API propagates
 
         self.app.push_screen(
             MoveStageModal(opp["id"], stage_ids, stage_names, current_stage_id=opp.get("pipelineStageId")),

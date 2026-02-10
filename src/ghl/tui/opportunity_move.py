@@ -35,10 +35,8 @@ class MoveStageModal(ModalScreen[None]):
     def compose(self):
         with Vertical():
             yield Label("Move to stage:")
-            lst = ListView(id="move-stage-list")
-            for sid, name in self._options:
-                lst.append(ListItem(Label(f"  {name}")))
-            yield lst
+            items = [ListItem(Label(f"  {name}")) for _sid, name in self._options]
+            yield ListView(*items, id="move-stage-list")
             yield Button("Move", variant="primary", id="move-do")
             yield Button("Cancel", id="move-cancel")
 
