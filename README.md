@@ -108,7 +108,7 @@ ghl contacts add-note CONTACT_ID "Note text"      # Add note to contact
 ghl contacts tasks CONTACT_ID                     # List contact tasks
 ```
 
-Contact list can use the **Contacts Search API** when you pass `--tag` or `--assigned-to`: results are filtered by tags (AND) and/or assigned user. Saved searches are stored in `~/.ghl_tui/saved_searches.json`. In the TUI: **f** = Filter (tags, assigned user, text query; apply or save as search), **s** = Saved searches (pick a saved filter or "All contacts").
+Contact list can use the **Contacts Search API** when you pass `--tag` or `--assigned-to`: results are filtered by tags (AND) and/or assigned user. Saved searches are stored in `~/.ghl_tui/saved_searches.json`. In the TUI: **f** = Filter (tags, assigned user, text query; apply or save as search), **s** = Saved searches (pick a saved filter or "All contacts"), **e** = Edit (includes custom fields)—view and edit contact custom fields defined in your location.
 
 ### Calendars & Appointments
 

@@ -181,7 +181,9 @@ class PipelineBoardView(Container):
             sel = self.query_one("#pipeline-select", Select)
             options = [("Select pipeline…", "")]
             for p in self._pipelines:
-                options.append((p.get("name") or p.get("id", ""), p.get("id", "")))
+                name = p.get("name") or "Unnamed"
+                pid = p.get("id", "")
+                options.append((f"{name} - {pid}", pid))
             sel.set_options(options)
             if self._pipeline_id and any(p.get("id") == self._pipeline_id for p in self._pipelines):
                 sel.value = self._pipeline_id

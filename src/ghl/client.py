@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Literal, Optional
+from typing import Any, ClassVar, Literal, Optional
 
 import httpx
 from pydantic import BaseModel
@@ -19,14 +19,53 @@ class RateLimitInfo(BaseModel):
     reset: Optional[float] = None
     interval_ms: int = 10000
 
+    RATE_LIMIT_HEADERS: ClassVar[tuple[str, ...]] = (
+        "x-ratelimit-remaining",
+        "x-ratelimit-max",
+        "x-ratelimit-limit",
+    )
+
+    @classmethod
+    def has_rate_limit_headers(cls, headers: httpx.Headers) -> bool:
+        """True if response includes any rate limit headers (GHL doesn't send them on all endpoints)."""
+        for name in cls.RATE_LIMIT_HEADERS:
+            if headers.get(name) is not None:
+                return True
+        return False
+
     @classmethod
     def from_headers(cls, headers: httpx.Headers) -> "RateLimitInfo":
-        """Parse rate limit info from response headers."""
+        """Parse rate limit info from GoHighLevel API response headers.
+
+        GHL uses: X-RateLimit-Max, X-RateLimit-Remaining, X-RateLimit-Interval-Milliseconds.
+        See: https://help.gohighlevel.com/support/solutions/articles/48001060529
+        """
+        interval_ms = int(
+            headers.get("x-ratelimit-interval-milliseconds")
+            or headers.get("x-ratelimit-interval-ms")
+            or 10000
+        )
+        reset = None
+        reset_val = headers.get("x-ratelimit-reset")
+        if reset_val:
+            try:
+                t = float(reset_val)
+                if t > 0:
+                    reset = t
+            except (TypeError, ValueError):
+                pass
+
         return cls(
-            limit=int(headers.get("x-ratelimit-limit", 100)),
-            remaining=int(headers.get("x-ratelimit-remaining", 100)),
-            reset=float(headers.get("x-ratelimit-reset", 0)) or None,
-            interval_ms=int(headers.get("x-ratelimit-interval-ms", 10000)),
+            limit=int(
+                headers.get("x-ratelimit-max")
+                or headers.get("x-ratelimit-limit")
+                or 100
+            ),
+            remaining=int(
+                headers.get("x-ratelimit-remaining") or 100
+            ),
+            reset=reset,
+            interval_ms=interval_ms,
         )
 
 
@@ -79,18 +118,23 @@ class GHLClient:
 
     def _handle_rate_limit(self, response: httpx.Response) -> None:
         """Update rate limit info and sleep if needed."""
-        self._rate_limit_info = RateLimitInfo.from_headers(response.headers)
+        # Only update from response when it includes rate limit headers; some GHL
+        # endpoints (e.g. customFields, customValues) don't return them, and we'd
+        # otherwise overwrite good info with defaults (100/100).
+        if RateLimitInfo.has_rate_limit_headers(response.headers):
+            self._rate_limit_info = RateLimitInfo.from_headers(response.headers)
 
         if response.status_code == 429:
             # Rate limited - wait and retry
-            wait_time = self._rate_limit_info.interval_ms / 1000.0
-            if self._rate_limit_info.reset:
-                wait_time = max(wait_time, self._rate_limit_info.reset - time.time())
+            rli = self._rate_limit_info or RateLimitInfo.from_headers(response.headers)
+            wait_time = rli.interval_ms / 1000.0
+            if rli.reset:
+                wait_time = max(wait_time, rli.reset - time.time())
             time.sleep(wait_time + 0.1)  # Add small buffer
             return
 
         # Proactively slow down if near limit
-        if self._rate_limit_info.remaining < 5:
+        if self._rate_limit_info and self._rate_limit_info.remaining < 5:
             time.sleep(0.5)
 
     def _handle_response(self, response: httpx.Response) -> dict[str, Any]:
@@ -101,12 +145,13 @@ class GHLClient:
             raise APIError(429, "Rate limited. Please wait and try again.")
 
         if response.status_code >= 400:
+            body: Optional[dict] = None
             try:
                 body = response.json()
-                message = body.get("message") or body.get("error") or str(body)
+                message = (body or {}).get("message") or (body or {}).get("error") or str(body)
             except Exception:
                 message = response.text or f"HTTP {response.status_code}"
-            raise APIError(response.status_code, message, body if "body" in dir() else None)
+            raise APIError(response.status_code, message, body)
 
         if response.status_code == 204:
             return {}
@@ -183,6 +228,8 @@ class GHLClient:
                 if e.status_code == 429 and attempt < max_retries - 1:
                     continue  # Retry after rate limit sleep
                 raise
+
+        raise RuntimeError("Exhausted retries")  # Unreachable; satisfies type checker
 
     def get(
         self,

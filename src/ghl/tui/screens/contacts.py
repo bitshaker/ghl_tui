@@ -19,6 +19,7 @@ from textual.worker import Worker, WorkerState
 from ...auth import get_location_id, get_token
 from ...client import GHLClient
 from ...services import contacts as contact_svc
+from ...services import custom_fields as custom_fields_svc
 from ...services import users as users_svc
 from ..contact_edit import ContactEditModal
 from ..contact_filter import ContactFilterModal, SavedSearchesModal
@@ -53,24 +54,61 @@ class ContactDetail(Static):
         super().__init__("Select a contact", **kwargs)
         self._contact: Optional[dict] = None
         self._contact_id: Optional[str] = None
+        self._custom_field_defs: list[dict] = []
+        self._custom_values: list[dict] = []
+        self._custom_values_map: dict[str, str] = {}
+        self._custom_value_id_map: dict[str, str] = {}
 
-    def show_contact(self, contact: dict) -> None:
+    def show_contact(
+        self,
+        contact: dict,
+        custom_field_defs: Optional[list[dict]] = None,
+        custom_values: Optional[list[dict]] = None,
+    ) -> None:
         self._contact = contact
         self._contact_id = contact.get("id")
+        self._custom_field_defs = custom_field_defs or []
+        self._custom_values = custom_values or []
+        self._custom_values_map = custom_fields_svc.build_custom_values_map(
+            contact, self._custom_values, self._custom_field_defs
+        )
+        self._custom_value_id_map = custom_fields_svc.build_custom_value_id_map(
+            self._custom_values
+        )
+
+        field_id_to_name = {
+            str(f.get("id") or f.get("customFieldId", "")): f.get("name") or f.get("label", "?")
+            for f in self._custom_field_defs
+        }
+        custom_lines = []
+        for fid, val in self._custom_values_map.items():
+            name = field_id_to_name.get(fid, fid)
+            if name and name != "?":
+                custom_lines.append(f"{name}: {val or '—'}")
+
         lines = [
             f"[bold]{_contact_label(contact)}[/bold]  ({contact.get('id', '')})",
             f"email: {contact.get('email') or '—'}",
             f"phone: {contact.get('phone') or '—'}",
             f"company: {contact.get('companyName') or '—'}",
             f"tags: {', '.join(contact.get('tags') or []) or '—'}",
+        ]
+        if custom_lines:
+            lines.append("")
+            lines.extend(custom_lines)
+        lines.extend([
             "",
             "[dim]n[/] notes  [dim]t[/] tasks  [dim]N[/] new  [dim]a[/] add tag  [dim]r[/] remove tag  [dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh",
-        ]
+        ])
         self.update("\n".join(lines))
 
     def clear_contact(self) -> None:
         self._contact = None
         self._contact_id = None
+        self._custom_field_defs = []
+        self._custom_values = []
+        self._custom_values_map = {}
+        self._custom_value_id_map = {}
         self.update("Select a contact")
 
     @property
@@ -80,6 +118,18 @@ class ContactDetail(Static):
     @property
     def contact(self) -> Optional[dict]:
         return self._contact
+
+    @property
+    def custom_field_defs(self) -> list[dict]:
+        return self._custom_field_defs
+
+    @property
+    def custom_values_map(self) -> dict[str, str]:
+        return self._custom_values_map
+
+    @property
+    def custom_value_id_map(self) -> dict[str, str]:
+        return self._custom_value_id_map
 
 
 class ContactNotesPreview(Static):
@@ -275,13 +325,23 @@ class ContactsView(Container):
             return (contacts, rli)
 
     @work(thread=True)
-    def load_contact_detail(self, contact_id: str) -> tuple[dict, list[dict], list[dict], object]:
-        with GHLClient(get_token(), get_location_id()) as client:
+    def load_contact_detail(self, contact_id: str) -> tuple:
+        location_id = get_location_id()
+        with GHLClient(get_token(), location_id) as client:
             contact = contact_svc.get_contact(client, contact_id)
             notes = contact_svc.list_notes(client, contact_id)
             tasks = contact_svc.list_tasks(client, contact_id)
+            custom_field_defs: list[dict] = []
+            custom_values: list[dict] = []
+            try:
+                custom_field_defs = custom_fields_svc.list_custom_fields(client, location_id)
+                custom_values = custom_fields_svc.list_custom_values(
+                    client, location_id, contact_id
+                )
+            except Exception:
+                pass
             rli = client.rate_limit_info
-            return (contact, notes, tasks, rli)
+            return (contact, notes, tasks, custom_field_defs, custom_values, rli)
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.state != WorkerState.SUCCESS or not event.worker.result:
@@ -292,15 +352,29 @@ class ContactsView(Container):
         except Exception:
             pass
         result = event.worker.result
-        if isinstance(result, tuple) and len(result) == 4:
-            contact, notes, tasks, rli = result
+        if isinstance(result, tuple) and len(result) >= 4:
+            contact = result[0]
+            notes = result[1]
+            tasks = result[2]
+            if len(result) == 6:
+                custom_field_defs = result[3]
+                custom_values = result[4]
+                rli = result[5]
+            else:
+                custom_field_defs = []
+                custom_values = []
+                rli = result[3]
             try:
                 header = self.screen.query_one("#header_bar")
                 header.update_rate_limit(rli)
             except Exception:
                 pass
             if isinstance(contact, dict) and contact.get("id"):
-                self.query_one("#contact-detail", ContactDetail).show_contact(contact)
+                self.query_one("#contact-detail", ContactDetail).show_contact(
+                    contact,
+                    custom_field_defs=custom_field_defs,
+                    custom_values=custom_values,
+                )
                 self.query_one("#contact-tasks-preview", ContactTasksPreview).show_tasks(tasks)
                 self.query_one("#contact-notes-preview", ContactNotesPreview).show_notes(notes)
         elif isinstance(result, tuple) and len(result) == 2:
@@ -387,7 +461,15 @@ class ContactsView(Container):
                 self.load_contact_detail(cid)
                 self.load_contacts()
 
-        self.app.push_screen(ContactEditModal(contact=detail.contact), on_done)
+        self.app.push_screen(
+            ContactEditModal(
+                contact=detail.contact,
+                custom_field_defs=detail.custom_field_defs,
+                custom_values_map=detail.custom_values_map,
+                custom_value_id_map=detail.custom_value_id_map,
+            ),
+            on_done,
+        )
 
     def action_add_tag(self) -> None:
         detail = self.query_one("#contact-detail", ContactDetail)

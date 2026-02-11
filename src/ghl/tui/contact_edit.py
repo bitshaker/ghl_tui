@@ -11,15 +11,31 @@ from textual.widgets import Button, Input, Label
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
 from ..services import contacts as contact_svc
+from ..services import custom_fields as custom_fields_svc
 
 
 class ContactEditModal(ModalScreen[dict]):
     """Modal to create or edit a contact."""
 
-    def __init__(self, contact: Optional[dict] = None, **kwargs) -> None:
+    def __init__(
+        self,
+        contact: Optional[dict] = None,
+        *,
+        custom_field_defs: Optional[list[dict]] = None,
+        custom_values_map: Optional[dict[str, str]] = None,
+        custom_value_id_map: Optional[dict[str, str]] = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self._contact = contact
         self._is_edit = contact is not None
+        self._custom_field_defs = custom_field_defs or []
+        self._custom_values_map = custom_values_map or {}
+        self._custom_value_id_map = custom_value_id_map or {}
+        self._custom_field_ids: list[str] = []  # fid for each custom field, in order
+
+    def _safe_id(self, fid: str) -> str:
+        return "custom-" + "".join(c if c.isalnum() or c in "-_" else "_" for c in fid)
 
     def compose(self):
         with Vertical():
@@ -59,6 +75,16 @@ class ContactEditModal(ModalScreen[dict]):
                 placeholder="Lead source",
                 id="contact-source",
             )
+            self._custom_field_ids = []
+            for field in self._custom_field_defs:
+                fid = str(field.get("id") or field.get("customFieldId", ""))
+                if not fid:
+                    continue
+                self._custom_field_ids.append(fid)
+                name = field.get("name") or field.get("label", fid)
+                value = self._custom_values_map.get(fid, "")
+                yield Label(name)
+                yield Input(value=value, placeholder=name, id=self._safe_id(fid))
             with Vertical():
                 yield Button("Save", variant="primary", id="contact-save")
                 yield Button("Cancel", id="contact-cancel")
@@ -72,6 +98,17 @@ class ContactEditModal(ModalScreen[dict]):
             return
         if event.button.id == "contact-save":
             self._save()
+
+    def _gather_custom_values(self) -> dict[str, str]:
+        """Collect custom field values from inputs."""
+        result: dict[str, str] = {}
+        for fid in self._custom_field_ids:
+            try:
+                inp = self.query_one(f"#{self._safe_id(fid)}", Input)
+                result[fid] = inp.value.strip()
+            except Exception:
+                pass
+        return result
 
     def _save(self) -> None:
         email = self.query_one("#contact-email", Input).value.strip() or None
@@ -96,6 +133,18 @@ class ContactEditModal(ModalScreen[dict]):
                     company_name=company,
                     source=source,
                 )
+                custom_values = self._gather_custom_values()
+                if custom_values:
+                    try:
+                        custom_fields_svc.save_custom_values(
+                            client,
+                            location_id,
+                            self._contact["id"],
+                            custom_values,
+                            self._custom_value_id_map,
+                        )
+                    except Exception as e:
+                        self.notify(f"Contact saved but custom fields failed: {e}", severity="warning")
                 updated = contact_svc.get_contact(client, self._contact["id"])
                 self.dismiss(updated)
             else:
