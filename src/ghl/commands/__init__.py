@@ -4,6 +4,7 @@ from .calendars import calendars
 from .config_cmd import config
 from .contacts import contacts
 from .conversations import conversations
+from .custom_fields import custom_fields
 from .locations import locations
 from .opportunities import opportunities
 from .pipelines import pipelines
@@ -16,6 +17,7 @@ __all__ = [
     "config",
     "contacts",
     "conversations",
+    "custom_fields",
     "locations",
     "opportunities",
     "pipelines",

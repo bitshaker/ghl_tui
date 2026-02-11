@@ -20,6 +20,7 @@ from .commands import (
     config,
     contacts,
     conversations,
+    custom_fields as custom_fields_cmd,
     locations,
     opportunities,
     pipelines,
@@ -60,6 +61,7 @@ def main(ctx, output_format=None):
 main.add_command(config)
 main.add_command(contacts)
 main.add_command(calendars)
+main.add_command(custom_fields_cmd)
 main.add_command(opportunities)
 main.add_command(conversations)
 main.add_command(workflows)

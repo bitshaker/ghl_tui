@@ -6,7 +6,7 @@ from typing import Optional
 
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label
+from textual.widgets import Button, Input, Label, Select
 
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
@@ -33,6 +33,7 @@ class ContactEditModal(ModalScreen[dict]):
         self._custom_values_map = custom_values_map or {}
         self._custom_value_id_map = custom_value_id_map or {}
         self._custom_field_ids: list[str] = []  # fid for each custom field, in order
+        self._dropdown_field_ids: set[str] = set()  # fields rendered as Select
 
     def _safe_id(self, fid: str) -> str:
         return "custom-" + "".join(c if c.isalnum() or c in "-_" else "_" for c in fid)
@@ -76,6 +77,7 @@ class ContactEditModal(ModalScreen[dict]):
                 id="contact-source",
             )
             self._custom_field_ids = []
+            self._dropdown_field_ids = set()
             for field in self._custom_field_defs:
                 fid = str(field.get("id") or field.get("customFieldId", ""))
                 if not fid:
@@ -83,8 +85,20 @@ class ContactEditModal(ModalScreen[dict]):
                 self._custom_field_ids.append(fid)
                 name = field.get("name") or field.get("label", fid)
                 value = self._custom_values_map.get(fid, "")
-                yield Label(name)
-                yield Input(value=value, placeholder=name, id=self._safe_id(fid))
+                opts = custom_fields_svc.get_field_options(field)
+                is_dropdown = custom_fields_svc.field_has_options(field)
+                if is_dropdown:
+                    self._dropdown_field_ids.add(fid)
+                    options: list[tuple[str, str]] = [("— (empty)", "")]
+                    options.extend(opts)
+                    # Ensure current value is in options (in case it was removed or options use different format)
+                    if value and not any(v == value for (_, v) in options):
+                        options.append((value, value))
+                    yield Label(name)
+                    yield Select(options, value=value or "", allow_blank=True, id=self._safe_id(fid))
+                else:
+                    yield Label(name)
+                    yield Input(value=value, placeholder=name, id=self._safe_id(fid))
             with Vertical():
                 yield Button("Save", variant="primary", id="contact-save")
                 yield Button("Cancel", id="contact-cancel")
@@ -100,12 +114,18 @@ class ContactEditModal(ModalScreen[dict]):
             self._save()
 
     def _gather_custom_values(self) -> dict[str, str]:
-        """Collect custom field values from inputs."""
+        """Collect custom field values from inputs and selects."""
         result: dict[str, str] = {}
         for fid in self._custom_field_ids:
             try:
-                inp = self.query_one(f"#{self._safe_id(fid)}", Input)
-                result[fid] = inp.value.strip()
+                sid = self._safe_id(fid)
+                if fid in self._dropdown_field_ids:
+                    sel = self.query_one(f"#{sid}", Select)
+                    val = sel.value
+                    result[fid] = str(val).strip() if val is not None else ""
+                else:
+                    inp = self.query_one(f"#{sid}", Input)
+                    result[fid] = inp.value.strip()
             except Exception:
                 pass
         return result
@@ -123,6 +143,20 @@ class ContactEditModal(ModalScreen[dict]):
         location_id = get_location_id()
         with GHLClient(get_token(), location_id) as client:
             if self._is_edit and self._contact:
+                custom_values = self._gather_custom_values()
+                # Build customFields for Update Contact body (no separate scope needed)
+                custom_fields_payload: list[dict] = []
+                for field in self._custom_field_defs:
+                    fid = str(field.get("id") or field.get("customFieldId", ""))
+                    if not fid:
+                        continue
+                    key = field.get("fieldKey") or field.get("key") or fid
+                    value = custom_values.get(fid, "")
+                    custom_fields_payload.append({
+                        "id": fid,
+                        "key": key,
+                        "field_value": value,
+                    })
                 contact_svc.update_contact(
                     client,
                     self._contact["id"],
@@ -132,19 +166,8 @@ class ContactEditModal(ModalScreen[dict]):
                     last_name=last,
                     company_name=company,
                     source=source,
+                    custom_fields=custom_fields_payload if custom_fields_payload else None,
                 )
-                custom_values = self._gather_custom_values()
-                if custom_values:
-                    try:
-                        custom_fields_svc.save_custom_values(
-                            client,
-                            location_id,
-                            self._contact["id"],
-                            custom_values,
-                            self._custom_value_id_map,
-                        )
-                    except Exception as e:
-                        self.notify(f"Contact saved but custom fields failed: {e}", severity="warning")
                 updated = contact_svc.get_contact(client, self._contact["id"])
                 self.dismiss(updated)
             else:

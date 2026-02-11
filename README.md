@@ -110,6 +110,17 @@ ghl contacts tasks CONTACT_ID                     # List contact tasks
 
 Contact list can use the **Contacts Search API** when you pass `--tag` or `--assigned-to`: results are filtered by tags (AND) and/or assigned user. Saved searches are stored in `~/.ghl_tui/saved_searches.json`. In the TUI: **f** = Filter (tags, assigned user, text query; apply or save as search), **s** = Saved searches (pick a saved filter or "All contacts"), **e** = Edit (includes custom fields)—view and edit contact custom fields defined in your location.
 
+### Custom fields (debug)
+
+```bash
+ghl custom-fields list                    # List custom field names, types, and parsed options
+ghl custom-fields list --json             # Full field objects as JSON
+ghl custom-fields list --raw              # Raw API response (for debugging dropdown option structure)
+ghl custom-fields values --contact ID    # Custom values for a contact (--raw for raw response)
+```
+
+Use `list --raw` to inspect the exact API shape if a dropdown shows no options in the TUI; the structure can then be matched in the app.
+
 ### Calendars & Appointments
 
 ```bash

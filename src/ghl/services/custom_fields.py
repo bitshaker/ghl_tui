@@ -8,6 +8,116 @@ if TYPE_CHECKING:
     from ..client import GHLClient
 
 
+# Field types that have a fixed set of options (dropdown, single-select, radio, etc.)
+# GHL uses dataType: "SINGLE_OPTIONS", "MULTI_OPTIONS" (normalized to lowercase)
+SELECTION_FIELD_TYPES = frozenset({
+    "dropdown", "dropdown_single", "single_option", "single_options",
+    "multi_options", "select", "radio", "multiselect", "multiple_options", "multiple_option",
+    "single select", "multi select", "single_select", "multi_select",
+})
+
+
+def _field_type(field: dict) -> str:
+    """Normalize field type for comparison."""
+    t = field.get("fieldType") or field.get("type") or field.get("dataType") or ""
+    return str(t).lower().strip()
+
+
+def _get_options_raw(field: dict) -> list:
+    """Get options list from field, trying multiple keys and nested shapes."""
+    # GHL uses picklistOptions (list of strings) for dataType SINGLE_OPTIONS / MULTI_OPTIONS
+    opts = (
+        field.get("picklistOptions")
+        or field.get("options")
+        or field.get("optionsList")
+        or field.get("optionsListObj")
+        or field.get("dropdownOptions")
+        or field.get("dropdown_options")
+    )
+    if isinstance(opts, list):
+        return opts
+    if isinstance(opts, dict):
+        return list(opts.items()) if opts else []
+    # Nested: data.options, metadata.options, etc.
+    for key in ("data", "metadata", "config"):
+        nested = field.get(key)
+        if isinstance(nested, dict):
+            o = nested.get("options") or nested.get("optionsList")
+            if isinstance(o, list):
+                return o
+            if isinstance(o, dict):
+                return list(o.items())
+    return []
+
+
+def field_has_options(field: dict) -> bool:
+    """Return True if this field has a fixed set of options (dropdown, etc.)."""
+    raw = _get_options_raw(field)
+    if raw and len(raw) > 0:
+        return True
+    # Treat as dropdown if field type says so (options might be empty or under different key)
+    return _field_type(field) in SELECTION_FIELD_TYPES
+
+
+def get_field_options(field: dict) -> list[tuple[str, str]]:
+    """
+    Extract (display_label, value) options for dropdown/select fields.
+    Handles common API shapes: {value, name}, {id, name}, {label, value}, (key, val) tuples, etc.
+    """
+    raw = _get_options_raw(field)
+    result: list[tuple[str, str]] = []
+    for item in raw:
+        if isinstance(item, str):
+            result.append((item, item))
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            result.append((str(item[0]), str(item[1])))
+        elif isinstance(item, dict):
+            # GHL often uses optionKey/optionValue, or option (display) with value
+            label = (
+                item.get("name") or item.get("label") or item.get("value") or item.get("id")
+                or item.get("text") or item.get("option") or item.get("optionValue") or item.get("optionKey") or ""
+            )
+            val = (
+                item.get("value") or item.get("id") or item.get("name") or item.get("key")
+                or item.get("optionKey") or item.get("optionValue") or item.get("option") or label
+            )
+            if label or val:
+                result.append((str(label), str(val)))
+    if result:
+        return result
+    # Fallback: string list under other keys (values, choices, enum, etc.)
+    for key in ("values", "choices", "enum", "items"):
+        arr = field.get(key)
+        if isinstance(arr, list) and arr:
+            for v in arr:
+                if isinstance(v, str):
+                    result.append((v, v))
+                elif isinstance(v, dict):
+                    label = v.get("name") or v.get("label") or v.get("value") or ""
+                    val = v.get("value") or v.get("id") or label
+                    if label or val:
+                        result.append((str(label), str(val)))
+            if result:
+                return result
+    return result
+
+
+# Custom fields to hide from TUI/editing (e.g. "Notes" is separate from contact notes feature)
+HIDDEN_CUSTOM_FIELD_KEYS = frozenset({"contact.notes"})
+HIDDEN_CUSTOM_FIELD_NAMES = frozenset({"notes"})
+
+
+def _is_hidden_custom_field(field: dict) -> bool:
+    """Return True if this field should not be shown or edited (e.g. Notes)."""
+    key = (field.get("fieldKey") or field.get("key") or "").strip().lower()
+    name = (field.get("name") or field.get("label") or "").strip().lower()
+    if key and key in HIDDEN_CUSTOM_FIELD_KEYS:
+        return True
+    if name and name in HIDDEN_CUSTOM_FIELD_NAMES:
+        return True
+    return False
+
+
 def list_custom_fields(client: "GHLClient", location_id: str) -> list[dict]:
     """List custom field definitions for a location (contact-scoped only)."""
     path = f"/locations/{location_id}/customFields"
@@ -15,8 +125,13 @@ def list_custom_fields(client: "GHLClient", location_id: str) -> list[dict]:
     fields = response.get("customFields", response.get("fields", []))
     if not isinstance(fields, list):
         return []
-    # Filter to contact entity type if field has entityType
-    return [f for f in fields if f.get("entityType", "contact") == "contact" or "entityType" not in f]
+    # Filter to contact entity type (entityType or model)
+    contact_fields = [
+        f for f in fields
+        if f.get("entityType", f.get("model", "contact")) == "contact" or "entityType" not in f
+    ]
+    # Exclude hidden fields (e.g. Notes custom field; we use contact notes instead)
+    return [f for f in contact_fields if not _is_hidden_custom_field(f)]
 
 
 def list_custom_values(

@@ -69,8 +69,13 @@ def update_contact(
     last_name: Optional[str] = None,
     company_name: Optional[str] = None,
     source: Optional[str] = None,
+    custom_fields: Optional[list[dict]] = None,
 ) -> dict:
-    """Update an existing contact. Only provided fields are updated."""
+    """Update an existing contact. Only provided fields are updated.
+
+    custom_fields: optional list of { id, key, field_value } for custom field
+    values (sent in Update Contact body; no separate custom-values scope needed).
+    """
     data: dict = {}
     if email is not None:
         data["email"] = email
@@ -84,6 +89,8 @@ def update_contact(
         data["companyName"] = company_name
     if source is not None:
         data["source"] = source
+    if custom_fields is not None and len(custom_fields) > 0:
+        data["customFields"] = custom_fields
     response = client.put(f"/contacts/{contact_id}", json=data)
     return response.get("contact", response)
 
