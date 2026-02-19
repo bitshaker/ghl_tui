@@ -1,6 +1,6 @@
 # GHL TUI
 
-A comprehensive TUI and command-line interface for the GoHighLevel API v2 using Personal Integration Tokens for Auth.
+A comprehensive TUI and command-line interface for the GoHighLevel API v2 using Private Integration Tokens for Auth.
 
 ## Installation
 
