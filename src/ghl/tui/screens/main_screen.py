@@ -31,8 +31,10 @@ class TabBar(Static):
 
     def render(self) -> str:
         if self._active == "contacts":
-            return "  * Contacts  |  Pipeline Board  "
-        return "  Contacts  |  * Pipeline Board  "
+            return "  * Contacts  |  Pipeline Board  |  Tasks  "
+        if self._active == "pipeline":
+            return "  Contacts  |  * Pipeline Board  |  Tasks  "
+        return "  Contacts  |  Pipeline Board  |  * Tasks  "
 
     def set_active(self, tab: str) -> None:
         self._active = tab
@@ -46,6 +48,7 @@ class MainScreen(Screen):
         ("q", "quit", "Quit"),
         ("1", "show_contacts", "Contacts"),
         ("2", "show_pipeline", "Pipeline"),
+        ("3", "show_tasks", "Tasks"),
     ]
 
     CSS = """
@@ -85,6 +88,9 @@ class MainScreen(Screen):
     def action_show_pipeline(self) -> None:
         self._switch_tab("pipeline")
 
+    def action_show_tasks(self) -> None:
+        self._switch_tab("tasks")
+
     def _switch_tab(self, tab: str) -> None:
         if tab == self._current_tab:
             return
@@ -95,9 +101,12 @@ class MainScreen(Screen):
         if tab == "contacts":
             from .contacts import ContactsView
             content.mount(ContactsView())
-        else:
+        elif tab == "pipeline":
             from .pipeline_board import PipelineBoardView
             content.mount(PipelineBoardView())
+        else:
+            from .tasks import TasksView
+            content.mount(TasksView())
 
     def on_mount(self) -> None:
         from .contacts import ContactsView

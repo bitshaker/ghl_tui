@@ -33,7 +33,7 @@ from ..contact_tasks import ContactTasksModal, task_display_text
 def _contact_label(c: dict) -> str:
     name = (c.get("firstName") or "") + " " + (c.get("lastName") or "")
     name = name.strip() or c.get("name") or c.get("email") or c.get("id") or "—"
-    return name[:40].strip()
+    return name[:40].strip().title()
 
 
 class ContactDetail(Static):

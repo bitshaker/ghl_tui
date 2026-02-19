@@ -86,10 +86,17 @@ class ContactTasksModal(ModalScreen[None]):
     }
     """
 
-    def __init__(self, contact_id: str, contact_name: str | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        contact_id: str,
+        contact_name: str | None = None,
+        initial_task_id: str | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self._contact_id = contact_id
         self._contact_name = (contact_name or "").strip() or None
+        self._initial_task_id = (initial_task_id or "").strip() or None
         self._tasks: list[dict] = []
         self._selected_index: int = -1
 
@@ -125,6 +132,13 @@ class ContactTasksModal(ModalScreen[None]):
         lst.clear()
         for t in self._tasks:
             lst.append(ListItem(Label(task_display_text(t))))
+        if self._initial_task_id and self._tasks:
+            for i, t in enumerate(self._tasks):
+                if (t.get("id") or t.get("_id")) == self._initial_task_id:
+                    self._selected_index = i
+                    lst.index = i
+                    break
+            self._initial_task_id = None
         self._update_actions_visibility()
 
     def _update_actions_visibility(self) -> None:

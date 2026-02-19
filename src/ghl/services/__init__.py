@@ -26,6 +26,7 @@ from .opportunities import (
     update_opportunity,
 )
 from .pipelines import get_pipeline, list_pipelines, list_stages
+from .tasks import search_tasks
 
 __all__ = [
     "add_note",
@@ -48,6 +49,7 @@ __all__ = [
     "move_opportunity",
     "remove_tag",
     "search_contacts",
+    "search_tasks",
     "update_contact",
     "update_opportunity",
     "create_opportunity",

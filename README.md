@@ -59,6 +59,8 @@ When creating your Private Integration, select these scopes based on the feature
 | Conversations | `conversations.readonly`, `conversations.write` |
 | Workflows | `workflows.readonly` |
 | Locations | `locations.readonly` |
+| Tasks (location-level search, TUI Tasks tab) | `locations/tasks.readonly` |
+| Tasks (toggle complete in TUI) | `locations/tasks.write` (if supported) |
 | Users | `users.readonly` |
 
 ## Commands
@@ -109,6 +111,17 @@ ghl contacts tasks CONTACT_ID                     # List contact tasks
 ```
 
 Contact list can use the **Contacts Search API** when you pass `--tag` or `--assigned-to`: results are filtered by tags (AND) and/or assigned user. Saved searches are stored in `~/.ghl_tui/saved_searches.json`. In the TUI: **f** = Filter (tags, assigned user, text query; apply or save as search), **s** = Saved searches (pick a saved filter or "All contacts"), **e** = Edit (includes custom fields)—view and edit contact custom fields defined in your location.
+
+### Tasks (location-level)
+
+```bash
+ghl tasks search                           # Search tasks (table)
+ghl tasks search --json                    # Output as JSON
+ghl tasks search --assignee USER_ID        # Filter by assignee
+ghl tasks search --status pending         # Filter by status (pending | completed | all)
+```
+
+Requires `locations/tasks.readonly` scope. In the TUI: press **3** for the Tasks tab; filter by Assignee and Status, use saved filters (All Tasks, Due Today, Overdue, Upcoming), and press **Enter** to toggle task complete (may require `locations/tasks.write`).
 
 ### Custom fields (debug)
 

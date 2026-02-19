@@ -25,6 +25,7 @@ from .commands import (
     opportunities,
     pipelines,
     tags,
+    tasks,
     users,
     workflows,
 )
@@ -68,6 +69,7 @@ main.add_command(workflows)
 main.add_command(locations)
 main.add_command(users)
 main.add_command(tags)
+main.add_command(tasks)
 main.add_command(pipelines)
 
 

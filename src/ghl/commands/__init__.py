@@ -9,6 +9,7 @@ from .locations import locations
 from .opportunities import opportunities
 from .pipelines import pipelines
 from .tags import tags
+from .tasks import tasks
 from .users import users
 from .workflows import workflows
 
@@ -22,6 +23,7 @@ __all__ = [
     "opportunities",
     "pipelines",
     "tags",
+    "tasks",
     "users",
     "workflows",
 ]
