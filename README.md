@@ -2,6 +2,9 @@
 
 A comprehensive TUI and command-line interface for the GoHighLevel API v2 using Private Integration Tokens for Auth.
 
+> [!CAUTION]
+> **Admin-level access:** The **Private Integration Token** and its **scopes are admin-level** for GoHighLevel. There is **no user-scoping**: the token can see and do everything the granted scopes allow, as if you were an admin user. Protect your token and only grant the scopes you actually need. This may not be suitable for regular users if you need to protect information in your instance.
+
 ## Installation
 
 ```bash
