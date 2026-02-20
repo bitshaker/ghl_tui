@@ -14,7 +14,6 @@ from .contacts import (
     search_contacts,
     update_contact,
 )
-from .users import list_users
 from .opportunities import (
     create_opportunity,
     delete_opportunity,
@@ -27,6 +26,7 @@ from .opportunities import (
 )
 from .pipelines import get_pipeline, list_pipelines, list_stages
 from .tasks import search_tasks
+from .users import list_users
 
 __all__ = [
     "add_note",

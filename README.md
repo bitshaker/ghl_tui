@@ -52,7 +52,7 @@ pip install -e .
 
 ## Required Scopes
 
-When creating your Private Integration, select these scopes based on the features you need:
+When creating your Private Integration, select these scopes based on the features you need. These are some basic ones that will make most things work:
 
 | Feature | Required Scopes |
 |---------|----------------|
@@ -83,11 +83,11 @@ ghl config clear --all        # Clear all configuration
 You can store multiple **profiles**, each with its own API token and location ID. The **active** profile is used for all commands and the TUI, and your last choice is remembered.
 
 ```bash
-ghl config profiles add NAME              # Add profile (prompts for token & location)
+ghl config profiles add NAME                           # Add profile (prompts for token & location)
 ghl config profiles add work -t TOKEN -l LOCATION_ID   # Add with options
-ghl config profiles list                  # List profiles (* = active)
-ghl config profiles use NAME             # Switch to this profile (persisted)
-ghl config profiles remove NAME          # Remove a profile
+ghl config profiles list                               # List profiles (* = active)
+ghl config profiles use NAME                           # Switch to this profile (persisted)
+ghl config profiles remove NAME                        # Remove a profile
 ```
 
 Example: add `work` and `personal`, then run `ghl config profiles use personal` — the next time you run `ghl` or `ghl tui`, that profile is used by default.
@@ -95,17 +95,17 @@ Example: add `work` and `personal`, then run `ghl config profiles use personal` 
 ### Contacts
 
 ```bash
-ghl contacts list                         # List contacts
-ghl contacts list --limit 50              # List with custom limit
+ghl contacts list                                 # List contacts
+ghl contacts list --limit 50                      # List with custom limit
 ghl contacts list --tag "VIP" --tag "Lead"        # Filter by tags (Search API)
 ghl contacts list --assigned-to USER_ID           # Filter by assigned user
 ghl contacts list -q "john" --tag "Lead"          # Query + tag filter
-ghl contacts saved-searches               # List locally saved search filters
-ghl contacts get CONTACT_ID               # Get contact details
-ghl contacts create --email "a@b.com"     # Create contact
+ghl contacts saved-searches                       # List locally saved search filters
+ghl contacts get CONTACT_ID                       # Get contact details
+ghl contacts create --email "a@b.com"             # Create contact
 ghl contacts update CONTACT_ID --phone "+1234"    # Update contact
 ghl contacts delete CONTACT_ID                    # Delete contact
-ghl contacts search "query"               # Search contacts
+ghl contacts search "query"                       # Search contacts
 ghl contacts tag CONTACT_ID --tag "VIP"           # Add tag to contact
 ghl contacts untag CONTACT_ID --tag "VIP"         # Remove tag from contact
 ghl contacts notes CONTACT_ID                     # List contact notes
@@ -118,9 +118,9 @@ Contact list can use the **Contacts Search API** when you pass `--tag` or `--ass
 ### Tasks (location-level)
 
 ```bash
-ghl tasks search                           # Search tasks (table)
-ghl tasks search --json                    # Output as JSON
-ghl tasks search --assignee USER_ID        # Filter by assignee
+ghl tasks search                          # Search tasks (table)
+ghl tasks search --json                   # Output as JSON
+ghl tasks search --assignee USER_ID       # Filter by assignee
 ghl tasks search --status pending         # Filter by status (pending | completed | all)
 ```
 
@@ -132,7 +132,7 @@ Requires `locations/tasks.readonly` scope. In the TUI: press **3** for the Tasks
 ghl custom-fields list                    # List custom field names, types, and parsed options
 ghl custom-fields list --json             # Full field objects as JSON
 ghl custom-fields list --raw              # Raw API response (for debugging dropdown option structure)
-ghl custom-fields values --contact ID    # Custom values for a contact (--raw for raw response)
+ghl custom-fields values --contact ID     # Custom values for a contact (--raw for raw response)
 ```
 
 Use `list --raw` to inspect the exact API shape if a dropdown shows no options in the TUI; the structure can then be matched in the app.
@@ -331,3 +331,9 @@ pytest
 ## License
 
 MIT
+
+I make no warranties. This is for my personal use and it's a gift. 
+
+Fixes welcome. Improvements may be rejected.
+
+If it breaks, you keep both parts.

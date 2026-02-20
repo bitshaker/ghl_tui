@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 from textual import on, work
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, DataTable, Label, Select, Static
+from textual.widgets import Button, DataTable, Label, Select
 from textual.worker import Worker, WorkerState
 
 from ...auth import get_location_id, get_token
@@ -153,7 +153,7 @@ class TasksView(Container):
 
     @work(thread=True)
     def load_tasks(self) -> tuple[list[dict], dict[str, str], dict[str, str], object]:
-        """Fetch tasks, user list, resolve contact names; return (tasks, user_map, contact_map, rate_limit_info)."""
+        """Fetch tasks, users, contact names; return (tasks, user_map, contact_map, rli)."""
         location_id = get_location_id()
         with GHLClient(get_token(), location_id) as client:
             users = users_svc.list_users(client)
@@ -200,11 +200,17 @@ class TasksView(Container):
             body = (t.get("body") or "").strip()
             desc = (body.replace("\n", " ")[:40] + "…") if len(body) > 40 else body or "—"
             contact_id = t.get("contactId") or ""
-            contact_name = t.get("contactName") or self._contact_name_map.get(contact_id, contact_id[:20] if contact_id else "—")
+            contact_name = t.get("contactName") or self._contact_name_map.get(
+                contact_id, contact_id[:20] if contact_id else "—"
+            )
             assignee_id = t.get("assignedTo") or ""
-            assignee_name = t.get("assigneeName") or self._user_name_map.get(assignee_id, assignee_id[:20] if assignee_id else "—")
+            assignee_name = t.get("assigneeName") or self._user_name_map.get(
+                assignee_id, assignee_id[:20] if assignee_id else "—"
+            )
             due = format_task_date(t.get("dueDate"))
-            table.add_row(status_cell, title, desc, contact_name, assignee_name, due, key=t.get("id"))
+            table.add_row(
+                status_cell, title, desc, contact_name, assignee_name, due, key=t.get("id")
+            )
 
     def _get_selected_task(self) -> Optional[dict]:
         table = self.query_one("#tasks-table", DataTable)

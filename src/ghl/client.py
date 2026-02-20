@@ -27,7 +27,7 @@ class RateLimitInfo(BaseModel):
 
     @classmethod
     def has_rate_limit_headers(cls, headers: httpx.Headers) -> bool:
-        """True if response includes any rate limit headers (GHL doesn't send them on all endpoints)."""
+        """True if response has rate limit headers (GHL doesn't send them on all endpoints)."""
         for name in cls.RATE_LIMIT_HEADERS:
             if headers.get(name) is not None:
                 return True
@@ -183,8 +183,8 @@ class GHLClient:
             json: JSON body
             files: Files to upload
             max_retries: Maximum number of retries for rate limits
-            include_location_id: If True, add location to query params (set False for nested routes)
-            location_param: Key to use when adding location - "locationId" (contacts, etc.) or "location_id" (opportunities/search)
+            include_location_id: If True, add location to query params (False for nested routes)
+            location_param: Key for location ("locationId" or "location_id")
 
         Returns:
             Response JSON as dict
@@ -193,7 +193,7 @@ class GHLClient:
         if params:
             params = {k: v for k, v in params.items() if v is not None}
 
-        # Add location to params if requested. Use the key the endpoint expects (contacts reject location_id).
+        # Add location if requested. Endpoints use "locationId" or "location_id".
         if include_location_id and self.location_id:
             if params is None:
                 params = {}

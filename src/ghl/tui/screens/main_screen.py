@@ -1,6 +1,6 @@
 """Main screen: header, tab bar, content area, footer."""
 
-from textual.containers import Container, Horizontal
+from textual.containers import Container
 from textual.screen import Screen
 from textual.widgets import Footer, Static
 

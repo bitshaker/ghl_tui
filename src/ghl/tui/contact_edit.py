@@ -109,11 +109,13 @@ class ContactEditModal(ModalScreen[dict]):
                     self._dropdown_field_ids.add(fid)
                     options: list[tuple[str, str]] = [("— (empty)", "")]
                     options.extend(opts)
-                    # Ensure current value is in options (in case it was removed or options use different format)
+                    # Ensure current value is in options (in case it was removed or format differs)
                     if value and not any(v == value for (_, v) in options):
                         options.append((value, value))
                     yield Label(name)
-                    yield Select(options, value=value or "", allow_blank=True, id=self._safe_id(fid))
+                    yield Select(
+                        options, value=value or "", allow_blank=True, id=self._safe_id(fid)
+                    )
                 else:
                     yield Label(name)
                     yield Input(value=value, placeholder=name, id=self._safe_id(fid))

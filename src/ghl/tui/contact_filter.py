@@ -11,7 +11,9 @@ from textual.widgets import Button, Input, Label, Select, Static
 from ..saved_searches import list_saved_searches, save_search
 
 
-def _filter_dict(tags: list[str], assigned_to: Optional[str], query: Optional[str]) -> dict[str, Any]:
+def _filter_dict(
+    tags: list[str], assigned_to: Optional[str], query: Optional[str]
+) -> dict[str, Any]:
     return {
         "tags": [t.strip() for t in tags if t.strip()],
         "assignedTo": (assigned_to or "").strip() or None,
@@ -20,7 +22,7 @@ def _filter_dict(tags: list[str], assigned_to: Optional[str], query: Optional[st
 
 
 class ContactFilterModal(ModalScreen[Optional[dict[str, Any]]]):
-    """Modal to set contact filters: tags, assigned user, text query. Can Apply or Save as search."""
+    """Modal to set contact filters: tags, assigned user, query. Apply or Save as search."""
 
     def __init__(
         self,
@@ -103,7 +105,7 @@ class ContactFilterModal(ModalScreen[Optional[dict[str, Any]]]):
 
 
 class SavedSearchesModal(ModalScreen[Optional[tuple[dict[str, Any], Optional[str]]]]):
-    """Modal to pick a saved search or 'All contacts'. Returns (filter_dict, saved_search_name or None)."""
+    """Pick a saved search or 'All contacts'. Returns (filter_dict, saved_search_name or None)."""
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)

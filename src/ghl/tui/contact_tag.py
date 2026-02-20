@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, ListView, ListItem
+from textual.widgets import Button, Input, Label, ListItem, ListView
 
 from ..auth import get_location_id, get_token
 from ..client import GHLClient

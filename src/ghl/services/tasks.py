@@ -58,7 +58,11 @@ def search_tasks(
     if body_extra:
         body.update(body_extra)
     response = client.post(path, json=body, include_location_id=False)
-    raw = response.get("tasks", response.get("task", [])) if isinstance(response, dict) else response
+    raw = (
+        response.get("tasks", response.get("task", []))
+        if isinstance(response, dict)
+        else response
+    )
     if not isinstance(raw, list):
         return []
     # Normalize: API returns _id, contactDetails, assignedToUserDetails

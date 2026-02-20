@@ -1,6 +1,5 @@
 """Authentication handling for GHL CLI."""
 
-from typing import Optional
 
 import click
 

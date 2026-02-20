@@ -62,7 +62,9 @@ def profiles_list():
     """List all profiles and show which one is active (used by default)."""
     items = config_manager.list_profiles()
     if not items:
-        console.print("\n[dim]No profiles yet. Add one with: ghl config profiles add <name>[/dim]\n")
+        console.print(
+            "\n[dim]No profiles yet. Add one with: ghl config profiles add <name>[/dim]\n"
+        )
         return
     console.print("\n[bold]Profiles[/bold]\n")
     for name, is_active in items:
@@ -125,12 +127,12 @@ def show():
     console.print("\n[bold]GHL CLI Configuration[/bold]\n")
     if active_profile:
         console.print(f"  [cyan]Active profile:[/cyan]  [green]{active_profile}[/green]")
-    console.print(f"  [cyan]Location ID:[/cyan]    {cfg.location_id or config_manager.get_location_id() or '[dim]Not set[/dim]'}")
+    loc = cfg.location_id or config_manager.get_location_id() or "[dim]Not set[/dim]"
+    console.print(f"  [cyan]Location ID:[/cyan]    {loc}")
     console.print(f"  [cyan]API Version:[/cyan]    {cfg.api_version}")
     console.print(f"  [cyan]Output Format:[/cyan]  {cfg.output_format}")
-    console.print(
-        f"  [cyan]API Token:[/cyan]      {'[green]Configured[/green]' if token else '[red]Not set[/red]'}"
-    )
+    token_status = "[green]Configured[/green]" if token else "[red]Not set[/red]"
+    console.print(f"  [cyan]API Token:[/cyan]      {token_status}")
     console.print(f"\n  [dim]Config: {config_manager.CONFIG_FILE}[/dim]")
     console.print(f"  [dim]Profiles: {config_manager.PROFILES_FILE}[/dim]")
     console.print()

@@ -18,7 +18,7 @@ def list_opportunities(
     status: Optional[str] = None,
     contact_id: Optional[str] = None,
 ) -> list[dict]:
-    """List opportunities with optional filters. Uses GET /opportunities/search (location only), then filters in Python."""
+    """List opportunities with optional filters. Uses GET /opportunities/search."""
     params: dict = {}
     if client.location_id:
         params["location_id"] = client.location_id

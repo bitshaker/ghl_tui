@@ -1,8 +1,8 @@
 """Main CLI entry point for GHL CLI."""
 
 # Load .env FIRST before any other imports
-import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Explicitly load .env from current working directory
@@ -10,17 +10,16 @@ env_path = Path.cwd() / ".env"
 if env_path.exists():
     load_dotenv(env_path)
 
-import click
+import click  # noqa: E402
 
-from . import __version__
-from .auth import AuthError, get_location_id, get_token
-from .client import APIError
-from .commands import (
+from . import __version__  # noqa: E402
+from .auth import AuthError, get_location_id, get_token  # noqa: E402
+from .client import APIError  # noqa: E402
+from .commands import (  # noqa: E402
     calendars,
     config,
     contacts,
     conversations,
-    custom_fields as custom_fields_cmd,
     locations,
     opportunities,
     pipelines,
@@ -29,13 +28,18 @@ from .commands import (
     users,
     workflows,
 )
+from .commands import (  # noqa: E402
+    custom_fields as custom_fields_cmd,
+)
 
 
 @click.group()
 @click.version_option(version=__version__)
 @click.option("--json", "output_format", flag_value="json", default=None, help="Output as JSON")
 @click.option("--csv", "output_format", flag_value="csv", default=None, help="Output as CSV")
-@click.option("--quiet", "-q", "output_format", flag_value="quiet", default=None, help="Output only IDs")
+@click.option(
+    "--quiet", "-q", "output_format", flag_value="quiet", default=None, help="Output only IDs"
+)
 @click.pass_context
 def main(ctx, output_format=None):
     """GoHighLevel CLI - Command-line interface for GoHighLevel API v2.

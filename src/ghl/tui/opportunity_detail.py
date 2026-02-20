@@ -10,9 +10,15 @@ from textual.widgets import Button, Static
 
 from ..auth import get_location_id, get_token
 from ..client import GHLClient
-from ..services.opportunities import get_opportunity
 from ..services import pipelines as pipeline_svc
+from ..services.opportunities import get_opportunity
 from .opportunity_move import MoveStageModal
+
+
+def _contact_display(opp: dict) -> str:
+    """Contact name or email for display."""
+    contact = opp.get("contact") or {}
+    return contact.get("name") or contact.get("email") or "—"
 
 
 def _stage_label(opp: dict, stages: Optional[list[dict]] = None) -> str:
@@ -60,7 +66,7 @@ class OpportunityDetailModal(ModalScreen[None]):
             f"[bold]{opp.get('name') or '—'}[/bold]",
             f"Value: {opp.get('monetaryValue')}",
             f"Status: {opp.get('status')}",
-            f"Contact: {(opp.get('contact') or {}).get('name') or (opp.get('contact') or {}).get('email') or '—'}",
+            f"Contact: {_contact_display(opp)}",
             f"Stage: {_stage_label(opp, stages)}",
         ]
         self.query_one("#opp-detail", Static).update("\n".join(lines))

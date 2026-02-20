@@ -88,7 +88,7 @@ class ConfigManager:
         return new_config
 
     def _load_profiles_data(self) -> dict:
-        """Load profiles from disk. Returns {active: str?, profiles: {name: {api_token, location_id}}}."""
+        """Load profiles from disk. Returns {active, profiles: {name: {api_token, location_id}}}."""
         if self._profiles_data is not None:
             return self._profiles_data
         if not self.PROFILES_FILE.exists():

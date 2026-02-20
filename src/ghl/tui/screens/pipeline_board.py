@@ -6,15 +6,22 @@ from typing import Optional
 
 from textual import on, work
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.containers import Container, ScrollableContainer, Vertical
 from textual.widgets import (
-    Button,
     Label,
-    ListView,
     ListItem,
+    ListView,
     Select,
     Static,
 )
+from textual.worker import Worker, WorkerState
+
+from ...auth import get_location_id, get_token
+from ...client import GHLClient
+from ...services import opportunities as opp_svc
+from ...services import pipelines as pipeline_svc
+from ..opportunity_detail import OpportunityDetailModal
+from ..opportunity_move import MoveStageModal
 
 
 class OpportunityListView(ListView):
@@ -25,14 +32,6 @@ class OpportunityListView(ListView):
         Binding("up", "cursor_up", "Cursor up", show=False),
         Binding("down", "cursor_down", "Cursor down", show=False),
     ]
-from textual.worker import Worker, WorkerState
-
-from ...auth import get_location_id, get_token
-from ...client import GHLClient
-from ...services import opportunities as opp_svc
-from ...services import pipelines as pipeline_svc
-from ..opportunity_detail import OpportunityDetailModal
-from ..opportunity_move import MoveStageModal
 
 
 def _opp_label(opp: dict) -> str:
@@ -242,10 +241,13 @@ class PipelineBoardView(Container):
         stage_names = [s["name"] for s in self._stages]
         def on_done(_: None) -> None:
             self.load_board()
-            self.set_timer(3, self.load_board, name="refresh-after-move")  # Refresh again after API propagates
+            # Refresh again after API propagates
+            self.set_timer(3, self.load_board, name="refresh-after-move")
 
         self.app.push_screen(
-            MoveStageModal(opp["id"], stage_ids, stage_names, current_stage_id=opp.get("pipelineStageId")),
+            MoveStageModal(
+                opp["id"], stage_ids, stage_names, current_stage_id=opp.get("pipelineStageId")
+            ),
             on_done,
         )
 

@@ -5,9 +5,8 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from textual import work
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Vertical
 from textual.widgets import (
-    Button,
     Input,
     Label,
     ListItem,
@@ -24,10 +23,10 @@ from ...services import users as users_svc
 from ..contact_edit import ContactEditModal
 from ..contact_filter import ContactFilterModal, SavedSearchesModal
 from ..contact_notes import ContactNotesModal, format_note_date
-from ..text_utils import html_to_plain
 from ..contact_opportunities import ContactOpportunitiesModal
 from ..contact_tag import AddTagModal, RemoveTagModal
 from ..contact_tasks import ContactTasksModal, task_display_text
+from ..text_utils import html_to_plain
 
 
 def _contact_label(c: dict) -> str:
@@ -98,7 +97,8 @@ class ContactDetail(Static):
             lines.extend(custom_lines)
         lines.extend([
             "",
-            "[dim]n[/] notes  [dim]t[/] tasks  [dim]N[/] new  [dim]a[/] add tag  [dim]r[/] remove tag  [dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh",
+            "[dim]n[/] notes  [dim]t[/] tasks  [dim]N[/] new  [dim]a[/] add  [dim]r[/] remove tag",
+            "[dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh",
         ])
         self.update("\n".join(lines))
 

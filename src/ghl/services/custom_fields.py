@@ -75,7 +75,8 @@ def get_field_options(field: dict) -> list[tuple[str, str]]:
             # GHL often uses optionKey/optionValue, or option (display) with value
             label = (
                 item.get("name") or item.get("label") or item.get("value") or item.get("id")
-                or item.get("text") or item.get("option") or item.get("optionValue") or item.get("optionKey") or ""
+                or item.get("text") or item.get("option") or item.get("optionValue")
+                or item.get("optionKey") or ""
             )
             val = (
                 item.get("value") or item.get("id") or item.get("name") or item.get("key")

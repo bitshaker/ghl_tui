@@ -9,7 +9,7 @@ from textual.widgets import Static
 
 
 class HeaderBar(Static):
-    """Shows app title, location name (profile or ID), and API rate limit (remaining/limit, reset)."""
+    """Shows app title, location (profile or ID), and API rate limit (remaining/limit, reset)."""
 
     DEFAULT_CSS = """
     HeaderBar {
@@ -32,7 +32,11 @@ class HeaderBar(Static):
         self._rate_limit_info: Optional[object] = None
 
     def render(self) -> str:
-        loc = (self._location_label[:20] + "…") if len(self._location_label) > 20 else self._location_label or "—"
+        loc = (
+            (self._location_label[:20] + "…")
+            if len(self._location_label) > 20
+            else self._location_label or "—"
+        )
         rate = "—"
         if self._rate_limit_info is not None and hasattr(self._rate_limit_info, "remaining"):
             rli = self._rate_limit_info

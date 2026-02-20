@@ -53,11 +53,14 @@ def contacts():
 @output_format_options
 @click.option("--limit", "-l", default=20, help="Number of contacts to return")
 @click.option("--query", "-q", help="Search query (name, email, etc.)")
-@click.option("--tag", "-t", "tags", multiple=True, help="Filter by tag (contacts must have this tag); can repeat")
+@click.option(
+    "--tag", "-t", "tags", multiple=True,
+    help="Filter by tag (contacts must have this tag); can repeat",
+)
 @click.option("--assigned-to", help="Filter by assigned user ID")
 @click.pass_context
 def list_contacts(ctx, limit: int, query: Optional[str], tags: tuple, assigned_to: Optional[str]):
-    """List contacts in the location. Use --tag and --assigned-to for filtered search (Search API)."""
+    """List contacts. Use --tag and --assigned-to for filtered search (Search API)."""
     token = get_token()
     location_id = get_location_id()
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
@@ -297,7 +300,9 @@ def list_saved_searches_cmd(ctx):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
     searches = list_saved_searches()
     if not searches:
-        click.echo("No saved searches. Use the TUI (f = Filter, then Save as search) to create them.")
+        click.echo(
+            "No saved searches. Use the TUI (f = Filter, then Save as search) to create them."
+        )
         return
     rows = [
         {
@@ -310,7 +315,12 @@ def list_saved_searches_cmd(ctx):
     ]
     output_data(
         rows,
-        columns=[("name", "Name"), ("tags", "Tags"), ("assignedTo", "Assigned To"), ("query", "Query")],
+        columns=[
+            ("name", "Name"),
+            ("tags", "Tags"),
+            ("assignedTo", "Assigned To"),
+            ("query", "Query"),
+        ],
         format=output_format,
         title="Saved searches",
     )

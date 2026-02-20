@@ -97,7 +97,10 @@ def list_custom_fields_cmd(ctx, raw: bool):
 
 
 @custom_fields.command("values")
-@click.option("--contact", "contact_id", required=True, help="Contact ID to list custom values for.")
+@click.option(
+    "--contact", "contact_id", required=True,
+    help="Contact ID to list custom values for.",
+)
 @click.option("--raw", is_flag=True, help="Dump raw API response as JSON.")
 @click.pass_context
 def list_custom_values_cmd(ctx, contact_id: str, raw: bool):
