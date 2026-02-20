@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 if TYPE_CHECKING:
     from ..client import GHLClient
@@ -36,6 +36,8 @@ def create_contact(
     company_name: Optional[str] = None,
     source: Optional[str] = None,
     tags: Optional[list[str]] = None,
+    assigned_to: Optional[str] = None,
+    custom_fields: Optional[list[dict]] = None,
 ) -> dict:
     """Create a new contact. Requires at least email or phone."""
     data: dict = {"locationId": location_id}
@@ -55,8 +57,15 @@ def create_contact(
         data["source"] = source
     if tags:
         data["tags"] = tags
+    if assigned_to:
+        data["assignedTo"] = assigned_to
+    if custom_fields:
+        data["customFields"] = custom_fields
     response = client.post("/contacts/", json=data)
     return response.get("contact", response)
+
+
+_ASSIGNED_OMIT = object()  # sentinel: do not change assignedTo
 
 
 def update_contact(
@@ -69,10 +78,12 @@ def update_contact(
     last_name: Optional[str] = None,
     company_name: Optional[str] = None,
     source: Optional[str] = None,
+    assigned_to: Union[str, None, type(_ASSIGNED_OMIT)] = _ASSIGNED_OMIT,
     custom_fields: Optional[list[dict]] = None,
 ) -> dict:
     """Update an existing contact. Only provided fields are updated.
 
+    assigned_to: user id to assign, None to clear assignment, or omit to leave unchanged.
     custom_fields: optional list of { id, key, field_value } for custom field
     values (sent in Update Contact body; no separate custom-values scope needed).
     """
@@ -89,6 +100,8 @@ def update_contact(
         data["companyName"] = company_name
     if source is not None:
         data["source"] = source
+    if assigned_to is not _ASSIGNED_OMIT:
+        data["assignedTo"] = assigned_to
     if custom_fields is not None and len(custom_fields) > 0:
         data["customFields"] = custom_fields
     response = client.put(f"/contacts/{contact_id}", json=data)

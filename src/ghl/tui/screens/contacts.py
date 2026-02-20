@@ -447,7 +447,29 @@ class ContactsView(Container):
             if data:
                 self.load_contacts()
 
-        self.app.push_screen(ContactEditModal(contact=None), on_done)
+        location_id = get_location_id()
+        users: list[dict] = []
+        custom_field_defs: list[dict] = []
+        try:
+            with GHLClient(get_token(), location_id) as client:
+                users = users_svc.list_users(client)
+        except Exception as e:
+            self.notify(f"Could not load users: {e}", severity="error")
+        try:
+            with GHLClient(get_token(), location_id) as client:
+                custom_field_defs = custom_fields_svc.list_custom_fields(
+                    client, location_id
+                )
+        except Exception:
+            pass  # modal still shows standard fields
+        self.app.push_screen(
+            ContactEditModal(
+                contact=None,
+                users=users or [],
+                custom_field_defs=custom_field_defs or [],
+            ),
+            on_done,
+        )
 
     def action_edit_contact(self) -> None:
         detail = self.query_one("#contact-detail", ContactDetail)
@@ -461,12 +483,19 @@ class ContactsView(Container):
                 self.load_contact_detail(cid)
                 self.load_contacts()
 
+        try:
+            with GHLClient(get_token(), get_location_id()) as client:
+                users = users_svc.list_users(client)
+        except Exception as e:
+            self.notify(f"Could not load users: {e}", severity="error")
+            users = []
         self.app.push_screen(
             ContactEditModal(
                 contact=detail.contact,
                 custom_field_defs=detail.custom_field_defs,
                 custom_values_map=detail.custom_values_map,
                 custom_value_id_map=detail.custom_value_id_map,
+                users=users or [],
             ),
             on_done,
         )

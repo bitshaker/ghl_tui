@@ -24,6 +24,7 @@ class ContactEditModal(ModalScreen[dict]):
         custom_field_defs: Optional[list[dict]] = None,
         custom_values_map: Optional[dict[str, str]] = None,
         custom_value_id_map: Optional[dict[str, str]] = None,
+        users: Optional[list[dict]] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -32,6 +33,7 @@ class ContactEditModal(ModalScreen[dict]):
         self._custom_field_defs = custom_field_defs or []
         self._custom_values_map = custom_values_map or {}
         self._custom_value_id_map = custom_value_id_map or {}
+        self._users = users or []
         self._custom_field_ids: list[str] = []  # fid for each custom field, in order
         self._dropdown_field_ids: set[str] = set()  # fields rendered as Select
 
@@ -40,18 +42,6 @@ class ContactEditModal(ModalScreen[dict]):
 
     def compose(self):
         with Vertical():
-            yield Label("Email" if self._is_edit else "Email *")
-            yield Input(
-                value=(self._contact or {}).get("email", ""),
-                placeholder="email@example.com",
-                id="contact-email",
-            )
-            yield Label("Phone")
-            yield Input(
-                value=(self._contact or {}).get("phone", ""),
-                placeholder="+1…",
-                id="contact-phone",
-            )
             yield Label("First name")
             yield Input(
                 value=(self._contact or {}).get("firstName", ""),
@@ -64,6 +54,18 @@ class ContactEditModal(ModalScreen[dict]):
                 placeholder="Last",
                 id="contact-last",
             )
+            yield Label("Email" if self._is_edit else "Email *")
+            yield Input(
+                value=(self._contact or {}).get("email", ""),
+                placeholder="email@example.com",
+                id="contact-email",
+            )
+            yield Label("Phone")
+            yield Input(
+                value=(self._contact or {}).get("phone", ""),
+                placeholder="+1…",
+                id="contact-phone",
+            )
             yield Label("Company")
             yield Input(
                 value=(self._contact or {}).get("companyName", ""),
@@ -75,6 +77,22 @@ class ContactEditModal(ModalScreen[dict]):
                 value=(self._contact or {}).get("source", ""),
                 placeholder="Lead source",
                 id="contact-source",
+            )
+            # Assigned to (location users)
+            assigned_opts: list[tuple[str, str]] = [("— (unassigned)", "")]
+            for u in self._users:
+                uid = u.get("id") or ""
+                label = u.get("name") or u.get("email") or uid or "—"
+                assigned_opts.append((label[:50], uid))
+            current_assigned = (self._contact or {}).get("assignedTo") or ""
+            if current_assigned and not any(v == current_assigned for (_, v) in assigned_opts):
+                assigned_opts.append((current_assigned, current_assigned))
+            yield Label("Assigned to")
+            yield Select(
+                assigned_opts,
+                value=current_assigned or "",
+                allow_blank=True,
+                id="contact-assigned",
             )
             self._custom_field_ids = []
             self._dropdown_field_ids = set()
@@ -104,7 +122,7 @@ class ContactEditModal(ModalScreen[dict]):
                 yield Button("Cancel", id="contact-cancel")
 
     def on_mount(self) -> None:
-        self.query_one("#contact-email", Input).focus()
+        self.query_one("#contact-first", Input).focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "contact-cancel":
@@ -137,6 +155,9 @@ class ContactEditModal(ModalScreen[dict]):
         last = self.query_one("#contact-last", Input).value.strip() or None
         company = self.query_one("#contact-company", Input).value.strip() or None
         source = self.query_one("#contact-source", Input).value.strip() or None
+        assigned_sel = self.query_one("#contact-assigned", Select)
+        assigned = (assigned_sel.value or "").strip() if assigned_sel.value is not None else ""
+        assigned_to = assigned or None
         if not self._is_edit and not email and not phone:
             self.notify("Email or phone required", severity="error")
             return
@@ -166,11 +187,25 @@ class ContactEditModal(ModalScreen[dict]):
                     last_name=last,
                     company_name=company,
                     source=source,
+                    assigned_to=assigned_to,
                     custom_fields=custom_fields_payload if custom_fields_payload else None,
                 )
                 updated = contact_svc.get_contact(client, self._contact["id"])
                 self.dismiss(updated)
             else:
+                custom_values = self._gather_custom_values()
+                custom_fields_payload = []
+                for field in self._custom_field_defs:
+                    fid = str(field.get("id") or field.get("customFieldId", ""))
+                    if not fid:
+                        continue
+                    key = field.get("fieldKey") or field.get("key") or fid
+                    value = custom_values.get(fid, "")
+                    custom_fields_payload.append({
+                        "id": fid,
+                        "key": key,
+                        "field_value": value,
+                    })
                 created = contact_svc.create_contact(
                     client,
                     location_id=location_id,
@@ -180,6 +215,8 @@ class ContactEditModal(ModalScreen[dict]):
                     last_name=last,
                     company_name=company,
                     source=source,
+                    assigned_to=assigned_to,
+                    custom_fields=custom_fields_payload if custom_fields_payload else None,
                 )
                 self.dismiss(created)
         self.app.notify("Contact saved")
