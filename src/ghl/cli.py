@@ -1,6 +1,9 @@
 """Main CLI entry point for GHL CLI."""
 
 # Load .env FIRST before any other imports
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -90,6 +93,65 @@ def tui_cmd():
 
 
 main.add_command(tui_cmd)
+
+
+@main.command("completion")
+@click.option(
+    "--shell",
+    "-s",
+    type=click.Choice(["bash", "zsh", "fish"], case_sensitive=False),
+    help="Shell to generate completion for. If omitted, prints setup instructions.",
+)
+def completion_cmd(shell):
+    """Show shell completion setup so you can see command options with Tab.
+
+    Enable tab completion to see subcommands (e.g. config, contacts, calendars)
+    and options as you type. Run once with your shell, then add the suggested
+    line to your shell config (~/.bashrc, ~/.zshrc, or config.fish).
+
+    Example (zsh):
+      eval \"$(ghl completion --shell zsh)\"
+    """
+    if shell is None:
+        click.echo("Shell completion lets you press Tab to see commands and options.")
+        click.echo()
+        click.echo("Ways to enable (you don't have to use .zshrc):")
+        click.echo()
+        click.echo("  1. This terminal only - run once in this session:")
+        click.echo("     eval \"$(ghl completion --shell zsh)\"")
+        click.echo()
+        click.echo("  2. Permanent - add that line to ~/.zshrc (or ~/.bashrc / fish config).")
+        click.echo()
+        click.echo("  3. On demand - save and source when needed:")
+        click.echo("     ghl completion --shell zsh > ~/.ghl-complete.zsh")
+        click.echo("     source ~/.ghl-complete.zsh   # when you want completion")
+        click.echo()
+        click.echo("Replace zsh with bash or fish if you use another shell.")
+        return
+
+    env = {**os.environ, "_GHL_COMPLETE": f"{shell}_source"}
+    for cmd in (["ghl"], [sys.executable, "-m", "ghl"]):
+        try:
+            result = subprocess.run(
+                cmd,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            break
+        except FileNotFoundError:
+            continue
+    else:
+        click.echo(
+            "Could not find 'ghl' in PATH. Install with 'pip install -e .' and ensure 'ghl' is on PATH.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    if result.returncode != 0 and result.stderr:
+        click.echo(result.stderr, err=True)
+    click.echo(result.stdout)
 
 
 def cli():

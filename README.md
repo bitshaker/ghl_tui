@@ -50,6 +50,28 @@ pip install -e .
    ghl contacts create --email "john@example.com" --first-name "John" --last-name "Doe"
    ```
 
+### Shell completion (Tab lookahead)
+
+You can enable tab completion so that pressing **Tab** shows available commands and options (e.g. `ghl con` + Tab → `config`, `contacts`, `conversations`, `custom-fields`).
+
+**Ways to enable (pick one):**
+
+- **This terminal only (no config file):** run once in the current session:
+  ```bash
+  eval "$(ghl completion --shell zsh)"
+  ```
+- **Permanent (loads every new shell):** add that same line to `~/.zshrc` (or `~/.bashrc` / fish config).
+- **On demand:** save the script and source when you need it:
+  ```bash
+  ghl completion --shell zsh > ~/.ghl-complete.zsh
+  # when you want completion:  source ~/.ghl-complete.zsh
+  ```
+
+```bash
+ghl completion              # show instructions
+ghl completion --shell zsh  # output script (for eval or saving to a file)
+```
+
 ## Required Scopes
 
 When creating your Private Integration, select these scopes based on the features you need. These are some basic ones that will make most things work:
