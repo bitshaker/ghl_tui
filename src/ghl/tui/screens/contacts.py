@@ -36,7 +36,7 @@ def _contact_label(c: dict) -> str:
 
 
 class ContactDetail(Static):
-    """Right-hand panel showing selected contact details."""
+    """Right-hand panel showing selected contact details. Use m/p keys to open email/phone."""
 
     DEFAULT_CSS = """
     ContactDetail {
@@ -46,7 +46,6 @@ class ContactDetail(Static):
         background: $surface-darken-1;
         height: auto;
     }
-    .detail-line { padding: 0 0 1 0; }
     """
 
     def __init__(self, **kwargs) -> None:
@@ -85,10 +84,15 @@ class ContactDetail(Static):
             if name and name != "?":
                 custom_lines.append(f"{name}: {val or '—'}")
 
+        email_val = contact.get("email") or ""
+        phone_val = contact.get("phone") or ""
+        email_part = email_val if email_val else "—"
+        phone_part = phone_val if phone_val else "—"
+
         lines = [
             f"[bold]{_contact_label(contact)}[/bold]  ({contact.get('id', '')})",
-            f"email: {contact.get('email') or '—'}",
-            f"phone: {contact.get('phone') or '—'}",
+            f"email: {email_part}",
+            f"phone: {phone_part}",
             f"company: {contact.get('companyName') or '—'}",
             f"tags: {', '.join(contact.get('tags') or []) or '—'}",
         ]
@@ -98,7 +102,7 @@ class ContactDetail(Static):
         lines.extend([
             "",
             "[dim]n[/] notes  [dim]t[/] tasks  [dim]N[/] new  [dim]a[/] add  [dim]r[/] remove tag",
-            "[dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh",
+            "[dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh  [dim]m[/] mail  [dim]p[/] phone",
         ])
         self.update("\n".join(lines))
 
@@ -218,6 +222,8 @@ class ContactsView(Container):
         ("/", "focus_search", "Search"),
         ("f", "filter_contacts", "Filter"),
         ("s", "saved_searches", "Saved"),
+        ("m", "open_email", "Mail"),
+        ("p", "open_phone", "Phone"),
     ]
 
     DEFAULT_CSS = """
@@ -557,3 +563,27 @@ class ContactsView(Container):
         def on_done(_: object) -> None:
             self.load_contact_detail(cid)
         self.app.push_screen(ContactOpportunitiesModal(cid), on_done)
+
+    def action_open_email(self) -> None:
+        """Open the selected contact's email in the default mail client (works in any terminal)."""
+        detail = self.query_one("#contact-detail", ContactDetail)
+        if not detail.contact:
+            self.notify("Select a contact first", severity="warning")
+            return
+        email = (detail.contact.get("email") or "").strip()
+        if not email:
+            self.notify("No email for this contact", severity="warning")
+            return
+        self.app.open_url(f"mailto:{email}")
+
+    def action_open_phone(self) -> None:
+        """Open the selected contact's phone number with the default dialer (works in any terminal)."""
+        detail = self.query_one("#contact-detail", ContactDetail)
+        if not detail.contact:
+            self.notify("Select a contact first", severity="warning")
+            return
+        phone = (detail.contact.get("phone") or "").strip()
+        if not phone:
+            self.notify("No phone number for this contact", severity="warning")
+            return
+        self.app.open_url(f"tel:{phone}")
