@@ -36,7 +36,7 @@ def _contact_label(c: dict) -> str:
 
 
 class ContactDetail(Static):
-    """Right-hand panel showing selected contact details. Use m/p keys to open email/phone."""
+    """Right-hand panel showing selected contact details. Use m/p/S keys to open email/phone/SMS."""
 
     DEFAULT_CSS = """
     ContactDetail {
@@ -102,7 +102,7 @@ class ContactDetail(Static):
         lines.extend([
             "",
             "[dim]n[/] notes  [dim]t[/] tasks  [dim]N[/] new  [dim]a[/] add  [dim]r[/] remove tag",
-            "[dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh  [dim]m[/] mail  [dim]p[/] phone",
+            "[dim]e[/] edit  [dim]o[/] opportunities  [dim]R[/] refresh  [dim]m[/] mail  [dim]p[/] phone  [dim]S[/] sms",
         ])
         self.update("\n".join(lines))
 
@@ -224,6 +224,7 @@ class ContactsView(Container):
         ("s", "saved_searches", "Saved"),
         ("m", "open_email", "Mail"),
         ("p", "open_phone", "Phone"),
+        ("S", "open_sms", "SMS"),
     ]
 
     DEFAULT_CSS = """
@@ -587,3 +588,15 @@ class ContactsView(Container):
             self.notify("No phone number for this contact", severity="warning")
             return
         self.app.open_url(f"tel:{phone}")
+
+    def action_open_sms(self) -> None:
+        """Open the selected contact's phone number in the default SMS app (works in any terminal)."""
+        detail = self.query_one("#contact-detail", ContactDetail)
+        if not detail.contact:
+            self.notify("Select a contact first", severity="warning")
+            return
+        phone = (detail.contact.get("phone") or "").strip()
+        if not phone:
+            self.notify("No phone number for this contact", severity="warning")
+            return
+        self.app.open_url(f"sms:{phone}")
