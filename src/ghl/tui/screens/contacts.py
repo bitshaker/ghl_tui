@@ -80,9 +80,11 @@ class ContactDetail(Static):
         }
         custom_lines = []
         for fid, val in self._custom_values_map.items():
+            if not (val and str(val).strip()):
+                continue
             name = field_id_to_name.get(fid, fid)
             if name and name != "?":
-                custom_lines.append(f"{name}: {val or '—'}")
+                custom_lines.append(f"{name}: {val}")
 
         email_val = contact.get("email") or ""
         phone_val = contact.get("phone") or ""
@@ -93,9 +95,13 @@ class ContactDetail(Static):
             f"[bold]{_contact_label(contact)}[/bold]  ({contact.get('id', '')})",
             f"email: {email_part}",
             f"phone: {phone_part}",
-            f"company: {contact.get('companyName') or '—'}",
-            f"tags: {', '.join(contact.get('tags') or []) or '—'}",
         ]
+        company = (contact.get("companyName") or "").strip()
+        if company:
+            lines.append(f"company: {company}")
+        tags = contact.get("tags") or []
+        if tags:
+            lines.append(f"tags: {', '.join(tags)}")
         if custom_lines:
             lines.append("")
             lines.extend(custom_lines)
