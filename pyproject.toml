@@ -47,7 +47,7 @@ ghl = "ghl.cli:cli"
 packages = ["src/ghl"]
 
 [tool.ruff]
-line-length = 100
+line-length = 200
 target-version = "py39"
 
 [tool.ruff.lint]

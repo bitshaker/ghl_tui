@@ -68,7 +68,7 @@ def list_contacts(ctx, limit: int, query: Optional[str], tags: tuple, assigned_t
     with GHLClient(token, location_id) as client:
         tag_list = list(tags) if tags else None
         if tag_list or assigned_to:
-            contacts_list = contact_svc.contacts_search(
+            contacts_list, _total = contact_svc.contacts_search(
                 client,
                 location_id,
                 page_limit=limit,

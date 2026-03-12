@@ -231,6 +231,8 @@ class ContactsView(Container):
         ("m", "open_email", "Mail"),
         ("p", "open_phone", "Phone"),
         ("S", "open_sms", "SMS"),
+        ("]", "next_page", "Next page"),
+        ("[", "previous_page", "Prev page"),
     ]
 
     DEFAULT_CSS = """
@@ -262,11 +264,15 @@ class ContactsView(Container):
         self._selected_index: int = 0
         self._current_filter: dict[str, Any] = {}
         self._saved_search_name: Optional[str] = None
+        self._current_page: int = 1
+        self._total_contacts: int = 0
+        self._page_limit: int = 50
 
     def compose(self):
         with Vertical(id="contacts-left"):
             yield Input(placeholder="Search contacts…", id="contacts-search")
             yield Static("", id="contacts-filter-label")
+            yield Static("", id="contacts-pagination")
             yield ListView(id="contacts-list")
         with Vertical(id="contacts-right"):
             yield ContactDetail(id="contact-detail")
@@ -278,14 +284,16 @@ class ContactsView(Container):
         self.load_contacts()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        self._selected_index = event.list_view.index
+        idx = event.list_view.index
+        self._selected_index = idx if idx is not None else 0
         if 0 <= self._selected_index < len(self._contacts):
             contact = self._contacts[self._selected_index]
             self.load_contact_detail(contact.get("id"))
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "contacts-search":
-            self.load_contacts()
+            self._current_page = 1
+            self.load_contacts(page_override=1)
 
     def _filter_label(self) -> str:
         if self._saved_search_name:
@@ -311,9 +319,36 @@ class ContactsView(Container):
         except Exception:
             pass
 
+    def _pagination_label(self) -> str:
+        if self._total_contacts <= 0:
+            return ""
+        total_pages = max(
+            1,
+            (self._total_contacts + self._page_limit - 1) // self._page_limit,
+        )
+        if total_pages <= 1:
+            return f"[dim]{self._total_contacts} contact(s)[/dim]"
+        return (
+            f"[dim]Page {self._current_page} of {total_pages} "
+            f"({self._total_contacts} total)  [ ] prev  [ ] next[/dim]"
+        )
+
+    def _update_pagination_label(self) -> None:
+        try:
+            self.query_one("#contacts-pagination", Static).update(
+                self._pagination_label()
+            )
+        except Exception:
+            pass
+
     @work(thread=True)
-    def load_contacts(self, query_override: Optional[str] = None) -> tuple[list[dict], object]:
+    def load_contacts(
+        self,
+        query_override: Optional[str] = None,
+        page_override: Optional[int] = None,
+    ) -> tuple:
         location_id = get_location_id()
+        page = self._current_page if page_override is None else page_override
         with GHLClient(get_token(), location_id) as client:
             query = query_override
             if query is None:
@@ -327,20 +362,26 @@ class ContactsView(Container):
             tags = self._current_filter.get("tags") or []
             assigned_to = self._current_filter.get("assignedTo")
             custom_field_filters = self._current_filter.get("customFieldFilters") or []
-            if tags or assigned_to or custom_field_filters:
-                contacts = contact_svc.contacts_search(
-                    client,
-                    location_id,
-                    page_limit=50,
-                    query=query,
-                    tags=tags if tags else None,
-                    assigned_to=assigned_to,
-                    custom_field_filters=custom_field_filters if custom_field_filters else None,
+            has_filters = bool(tags or assigned_to or custom_field_filters)
+            contacts, total = contact_svc.contacts_search(
+                client,
+                location_id,
+                page=page,
+                page_limit=self._page_limit,
+                query=query,
+                tags=tags if tags else None,
+                assigned_to=assigned_to,
+                custom_field_filters=custom_field_filters if custom_field_filters else None,
+            )
+            # If no search/filter and Search API returned empty, fall back to list so user sees contacts
+            if not (has_filters or query) and not contacts:
+                contacts = contact_svc.list_contacts(
+                    client, limit=self._page_limit, query=None
                 )
-            else:
-                contacts = contact_svc.list_contacts(client, limit=50, query=query)
+                total = len(contacts)
+                page = 1
             rli = client.rate_limit_info
-            return (contacts, rli)
+            return (contacts, total, page, rli)
 
     @work(thread=True)
     def load_contact_detail(self, contact_id: str) -> tuple:
@@ -362,26 +403,15 @@ class ContactsView(Container):
             return (contact, notes, tasks, custom_field_defs, custom_values, rli)
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        if event.state == WorkerState.ERROR and getattr(event.worker, "error", None):
+            self.notify(f"Error: {event.worker.error}", severity="error")
+            return
         if event.state != WorkerState.SUCCESS or not event.worker.result:
             return
-        try:
-            header = self.screen.query_one("#header_bar")
-            header.update_rate_limit(None)
-        except Exception:
-            pass
         result = event.worker.result
-        if isinstance(result, tuple) and len(result) >= 4:
-            contact = result[0]
-            notes = result[1]
-            tasks = result[2]
-            if len(result) == 6:
-                custom_field_defs = result[3]
-                custom_values = result[4]
-                rli = result[5]
-            else:
-                custom_field_defs = []
-                custom_values = []
-                rli = result[3]
+        # Contact detail worker returns 6-tuple: (contact, notes, tasks, custom_field_defs, custom_values, rli)
+        if isinstance(result, tuple) and len(result) == 6:
+            contact, notes, tasks, custom_field_defs, custom_values, rli = result
             try:
                 header = self.screen.query_one("#header_bar")
                 header.update_rate_limit(rli)
@@ -395,15 +425,20 @@ class ContactsView(Container):
                 )
                 self.query_one("#contact-tasks-preview", ContactTasksPreview).show_tasks(tasks)
                 self.query_one("#contact-notes-preview", ContactNotesPreview).show_notes(notes)
-        elif isinstance(result, tuple) and len(result) == 2:
-            data, rli = result
+            return
+        # Contacts list worker returns 4-tuple: (contacts, total, page, rli)
+        if isinstance(result, tuple) and len(result) == 4:
+            contacts, total, page, rli = result
             try:
                 header = self.screen.query_one("#header_bar")
                 header.update_rate_limit(rli)
             except Exception:
                 pass
-            if isinstance(data, list):
-                self._contacts = data
+            if isinstance(contacts, list):
+                self._contacts = contacts
+                self._total_contacts = total
+                self._current_page = page
+                self._update_pagination_label()
                 if not self._contacts:
                     self.query_one("#contact-detail", ContactDetail).clear_contact()
                     self.query_one("#contact-tasks-preview", ContactTasksPreview).clear_tasks()
@@ -425,7 +460,26 @@ class ContactsView(Container):
 
     def action_refresh_contacts(self) -> None:
         """Reload the contacts list from the API."""
-        self.load_contacts()
+        self._current_page = 1
+        self.load_contacts(page_override=1)
+
+    def action_next_page(self) -> None:
+        """Load the next page of contacts."""
+        total_pages = max(
+            1,
+            (self._total_contacts + self._page_limit - 1) // self._page_limit,
+        )
+        if self._current_page >= total_pages:
+            self.notify("Already on last page", severity="warning")
+            return
+        self.load_contacts(page_override=self._current_page + 1)
+
+    def action_previous_page(self) -> None:
+        """Load the previous page of contacts."""
+        if self._current_page <= 1:
+            self.notify("Already on first page", severity="warning")
+            return
+        self.load_contacts(page_override=self._current_page - 1)
 
     def _apply_filter_result(self, result: Any) -> None:
         if result is None:
@@ -434,10 +488,11 @@ class ContactsView(Container):
             self._current_filter = result[0] or {}
             self._saved_search_name = result[1]
         else:
-            self._current_filter = result or {}
+            self._current_filter = result if isinstance(result, dict) else {}
             self._saved_search_name = None
         self._update_filter_label()
-        self.load_contacts()
+        self._current_page = 1
+        self.load_contacts(page_override=1)
 
     def action_filter_contacts(self) -> None:
         """Open filter modal; on apply/save set filter and reload."""
@@ -475,7 +530,8 @@ class ContactsView(Container):
     def action_new_contact(self) -> None:
         def on_done(data: dict | None) -> None:
             if data:
-                self.load_contacts()
+                self._current_page = 1
+                self.load_contacts(page_override=1)
 
         location_id = get_location_id()
         users: list[dict] = []
@@ -511,7 +567,8 @@ class ContactsView(Container):
         def on_done(data: dict | None) -> None:
             if data:
                 self.load_contact_detail(cid)
-                self.load_contacts()
+                self._current_page = 1
+                self.load_contacts(page_override=1)
 
         try:
             with GHLClient(get_token(), get_location_id()) as client:

@@ -129,11 +129,11 @@ def contacts_search(
     tags: Optional[list[str]] = None,
     assigned_to: Optional[str] = None,
     custom_field_filters: Optional[list[dict]] = None,
-) -> list[dict]:
+) -> tuple[list[dict], int]:
     """
     Search contacts via POST /contacts/search with filters.
-    Supports filter by tags (contains, AND across multiple), assignedTo (eq),
-    and custom fields (customFields.<field_id> with eq/not_eq/contains/not_contains/exists/not_exists).
+    Returns (contacts, total_count). Supports filter by tags (contains, AND across multiple),
+    assignedTo (eq), and custom fields.
     """
     filters: list[dict] = []
     if assigned_to:
@@ -174,7 +174,9 @@ def contacts_search(
         json=body,
         include_location_id=False,
     )
-    return response.get("contacts", [])
+    contacts = response.get("contacts", [])
+    total = int(response.get("total", len(contacts)))
+    return (contacts, total)
 
 
 def add_tag(client: "GHLClient", contact_id: str, tags: list[str]) -> None:
