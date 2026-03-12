@@ -19,7 +19,7 @@ def search_tasks(
     limit: Optional[int] = None,
     skip: Optional[int] = None,
     body_extra: Optional[dict[str, Any]] = None,
-) -> list[dict]:
+) -> tuple[list[dict], Optional[int]]:
     """Search tasks at location level. Body is required.
 
     Request body format: contactId (array), completed (bool), assignedTo (array),
@@ -37,7 +37,7 @@ def search_tasks(
         body_extra: Optional extra keys to merge into the request body.
 
     Returns:
-        List of task dicts (e.g. id, title, body, dueDate, completed, contactId).
+        Tuple of (list of task dicts, total count or None if not provided by API).
     """
     path = f"/locations/{location_id}/tasks/search"
     body: dict[str, Any] = {}
@@ -58,13 +58,21 @@ def search_tasks(
     if body_extra:
         body.update(body_extra)
     response = client.post(path, json=body, include_location_id=False)
+    total: Optional[int] = None
+    if isinstance(response, dict):
+        t = response.get("total")
+        if t is not None:
+            try:
+                total = int(t)
+            except (TypeError, ValueError):
+                pass
     raw = (
         response.get("tasks", response.get("task", []))
         if isinstance(response, dict)
         else response
     )
     if not isinstance(raw, list):
-        return []
+        return ([], total)
     # Normalize: API returns _id, contactDetails, assignedToUserDetails
     out = []
     for t in raw:
@@ -90,4 +98,4 @@ def search_tasks(
                 + (ad.get("lastName") or "").strip()
             ).strip() or ad.get("id") or ""
         out.append(task)
-    return out
+    return (out, total)

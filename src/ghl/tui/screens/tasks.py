@@ -7,7 +7,7 @@ from typing import Optional
 
 from textual import on, work
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, DataTable, Label, Select
+from textual.widgets import Button, DataTable, Label, Select, Static
 from textual.worker import Worker, WorkerState
 
 from ...auth import get_location_id, get_token
@@ -71,6 +71,8 @@ class TasksView(Container):
         ("enter", "toggle_complete", "Toggle complete"),
         ("c", "toggle_complete", "Complete"),
         ("e", "edit_task", "Edit task"),
+        ("]", "next_page", "Next page"),
+        ("[", "previous_page", "Prev page"),
     ]
 
     DEFAULT_CSS = """
@@ -91,6 +93,10 @@ class TasksView(Container):
         height: auto;
         padding: 0 0 1 0;
     }
+    #tasks-pagination {
+        height: auto;
+        padding: 0 0 1 0;
+    }
     #tasks-table {
         height: 1fr;
         min-height: 8;
@@ -106,6 +112,9 @@ class TasksView(Container):
         self._users: list[dict] = []
         self._user_name_map: dict[str, str] = {}
         self._contact_name_map: dict[str, str] = {}
+        self._current_page: int = 1
+        self._page_limit: int = 50
+        self._total_tasks: Optional[int] = None
 
     def compose(self):
         with Vertical(id="tasks-toolbar"):
@@ -124,6 +133,7 @@ class TasksView(Container):
             yield Button("Due Today", id="saved-due-today")
             yield Button("Overdue", id="saved-overdue")
             yield Button("Upcoming", id="saved-upcoming")
+        yield Static("", id="tasks-pagination")
         yield DataTable(id="tasks-table", cursor_type="row")
 
     def on_mount(self) -> None:
@@ -141,6 +151,7 @@ class TasksView(Container):
             self._saved_filter = "upcoming"
         else:
             return
+        self._current_page = 1
         self.load_tasks()
 
     @on(Select.Changed)
@@ -149,12 +160,17 @@ class TasksView(Container):
             self._assignee_id = (event.value or "").strip() or None
         elif event.select.id == "tasks-status":
             self._status = (event.value or "").strip() or None
+        self._current_page = 1
         self.load_tasks()
 
     @work(thread=True)
-    def load_tasks(self) -> tuple[list[dict], dict[str, str], dict[str, str], object]:
-        """Fetch tasks, users, contact names; return (tasks, user_map, contact_map, rli)."""
+    def load_tasks(
+        self, page_override: Optional[int] = None
+    ) -> tuple[list[dict], dict[str, str], dict[str, str], Optional[int], int, object]:
+        """Fetch tasks, users, contact names; return (tasks, user_map, contact_map, total, page, rli)."""
         location_id = get_location_id()
+        page = self._current_page if page_override is None else page_override
+        skip = (page - 1) * self._page_limit
         with GHLClient(get_token(), location_id) as client:
             users = users_svc.list_users(client)
             user_map = {}
@@ -162,11 +178,13 @@ class TasksView(Container):
                 uid = u.get("id") or ""
                 if uid:
                     user_map[uid] = u.get("name") or u.get("email") or uid
-            raw_tasks = tasks_svc.search_tasks(
+            raw_tasks, total = tasks_svc.search_tasks(
                 client,
                 location_id,
                 assignee_id=self._assignee_id,
                 status=self._status,
+                limit=self._page_limit,
+                skip=skip,
             )
             tasks_filtered = _apply_date_filter(raw_tasks, self._saved_filter)
             contact_map = {}
@@ -187,7 +205,7 @@ class TasksView(Container):
                     except Exception:
                         contact_map[cid] = cid[:20]
             rli = client.rate_limit_info
-            return (tasks_filtered, user_map, contact_map, rli)
+            return (tasks_filtered, user_map, contact_map, total, page, rli)
 
     def _refresh_table(self) -> None:
         table = self.query_one("#tasks-table", DataTable)
@@ -222,8 +240,31 @@ class TasksView(Container):
             return self._tasks[idx]
         return None
 
+    def _pagination_label(self) -> str:
+        count = len(self._tasks)
+        if self._total_tasks is not None:
+            total_pages = max(1, (self._total_tasks + self._page_limit - 1) // self._page_limit)
+            if total_pages <= 1:
+                n = self._total_tasks
+                return f"[dim]{n} task(s)[/dim]" if n else ""
+            total_s = f" ({self._total_tasks} total)"
+            return (
+                f"[dim]Page {self._current_page} of {total_pages}{total_s}  [ ] prev  [ ] next[/dim]"
+            )
+        # Total unknown (API didn't return it): don't show "of Y"
+        if self._current_page <= 1 and count < self._page_limit:
+            return f"[dim]{count} task(s)[/dim]" if count else ""
+        return f"[dim]Page {self._current_page}  [ ] prev  [ ] next[/dim]"
+
+    def _update_pagination_label(self) -> None:
+        try:
+            self.query_one("#tasks-pagination", Static).update(self._pagination_label())
+        except Exception:
+            pass
+
     def action_refresh_tasks(self) -> None:
-        self.load_tasks()
+        self._current_page = 1
+        self.load_tasks(page_override=1)
 
     @work(thread=True)
     def _toggle_task_complete(
@@ -270,6 +311,28 @@ class TasksView(Container):
             on_done,
         )
 
+    def action_next_page(self) -> None:
+        """Load the next page of tasks."""
+        if self._total_tasks is not None:
+            total_pages = max(
+                1,
+                (self._total_tasks + self._page_limit - 1) // self._page_limit,
+            )
+            if self._current_page >= total_pages:
+                self.notify("Already on last page", severity="warning")
+                return
+        elif len(self._tasks) < self._page_limit:
+            self.notify("Already on last page", severity="warning")
+            return
+        self.load_tasks(page_override=self._current_page + 1)
+
+    def action_previous_page(self) -> None:
+        """Load the previous page of tasks."""
+        if self._current_page <= 1:
+            self.notify("Already on first page", severity="warning")
+            return
+        self.load_tasks(page_override=self._current_page - 1)
+
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.state != WorkerState.SUCCESS or not event.worker.result:
             return
@@ -279,9 +342,9 @@ class TasksView(Container):
             self.notify("Task updated")
             self.load_tasks()
             return
-        if not isinstance(result, tuple) or len(result) != 4:
+        if not isinstance(result, tuple) or len(result) != 6:
             return
-        tasks_list, user_map, contact_map, rli = result
+        tasks_list, user_map, contact_map, total, page, rli = result
         try:
             header = self.screen.query_one("#header_bar")
             header.update_rate_limit(rli)
@@ -290,7 +353,10 @@ class TasksView(Container):
         self._user_name_map = user_map
         self._contact_name_map = contact_map
         self._tasks = tasks_list
+        self._total_tasks = total
+        self._current_page = page
         self._refresh_table()
+        self._update_pagination_label()
         # Populate Assignee Select with users on first load
         if not self._users and user_map:
             self._users = [{"id": k, "name": v} for k, v in user_map.items()]

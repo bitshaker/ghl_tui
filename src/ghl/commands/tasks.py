@@ -59,7 +59,7 @@ def search_cmd(
     status_param = None if status == "all" else status
 
     with GHLClient(token, location_id) as client:
-        tasks_list = tasks_svc.search_tasks(
+        tasks_list, _ = tasks_svc.search_tasks(
             client,
             location_id,
             assignee_id=assignee_id or None,
