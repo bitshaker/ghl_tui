@@ -128,10 +128,12 @@ def contacts_search(
     query: Optional[str] = None,
     tags: Optional[list[str]] = None,
     assigned_to: Optional[str] = None,
+    custom_field_filters: Optional[list[dict]] = None,
 ) -> list[dict]:
     """
     Search contacts via POST /contacts/search with filters.
-    Supports filter by tags (contains, AND across multiple) and assignedTo (eq).
+    Supports filter by tags (contains, AND across multiple), assignedTo (eq),
+    and custom fields (customFields.<field_id> with eq/not_eq/contains/not_contains/exists/not_exists).
     """
     filters: list[dict] = []
     if assigned_to:
@@ -141,6 +143,21 @@ def contacts_search(
             tag = (tag or "").strip()
             if tag:
                 filters.append({"field": "tags", "operator": "contains", "value": tag})
+    if custom_field_filters:
+        for cf in custom_field_filters:
+            field_id = cf.get("field_id")
+            if not field_id:
+                continue
+            op = (cf.get("operator") or "eq").strip()
+            payload: dict = {
+                "field": f"customFields.{field_id}",
+                "operator": op,
+            }
+            if op not in ("exists", "not_exists"):
+                val = cf.get("value")
+                if val is not None:
+                    payload["value"] = val
+            filters.append(payload)
 
     body: dict = {
         "locationId": location_id,

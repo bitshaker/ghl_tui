@@ -298,6 +298,9 @@ class ContactsView(Container):
             parts.append("assigned")
         if f.get("query"):
             parts.append(f"q: {f['query']}")
+        cf = f.get("customFieldFilters") or []
+        if cf:
+            parts.append(f"{len(cf)} custom field(s)")
         if not parts:
             return ""
         return "[dim]" + " | ".join(parts) + "[/dim]"
@@ -323,7 +326,8 @@ class ContactsView(Container):
                 query = self._current_filter.get("query")
             tags = self._current_filter.get("tags") or []
             assigned_to = self._current_filter.get("assignedTo")
-            if tags or assigned_to:
+            custom_field_filters = self._current_filter.get("customFieldFilters") or []
+            if tags or assigned_to or custom_field_filters:
                 contacts = contact_svc.contacts_search(
                     client,
                     location_id,
@@ -331,6 +335,7 @@ class ContactsView(Container):
                     query=query,
                     tags=tags if tags else None,
                     assigned_to=assigned_to,
+                    custom_field_filters=custom_field_filters if custom_field_filters else None,
                 )
             else:
                 contacts = contact_svc.list_contacts(client, limit=50, query=query)
@@ -442,10 +447,22 @@ class ContactsView(Container):
         except Exception as e:
             self.notify(f"Could not load users: {e}", severity="error")
             users = []
+        custom_field_defs: list[dict] = []
+        try:
+            with GHLClient(get_token(), get_location_id()) as client:
+                custom_field_defs = custom_fields_svc.list_custom_fields(
+                    client, get_location_id()
+                )
+        except Exception:
+            pass
         def on_done(res: Any) -> None:
             self._apply_filter_result(res)
         self.app.push_screen(
-            ContactFilterModal(users=users or [], current_filter=self._current_filter),
+            ContactFilterModal(
+                users=users or [],
+                custom_field_defs=custom_field_defs or [],
+                current_filter=self._current_filter,
+            ),
             on_done,
         )
 

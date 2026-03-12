@@ -17,7 +17,7 @@ def _path(ensure_dir: bool = False) -> Path:
 
 
 def list_saved_searches() -> list[dict[str, Any]]:
-    """Load saved searches from disk. Returns list of { id, name, tags, assignedTo, query }."""
+    """Load saved searches from disk. Returns list of { id, name, tags, assignedTo, query, customFieldFilters }."""
     p = _path(ensure_dir=False)
     if not p.exists():
         return []
@@ -36,6 +36,7 @@ def save_search(
     tags: Optional[list[str]] = None,
     assigned_to: Optional[str] = None,
     query: Optional[str] = None,
+    custom_field_filters: Optional[list[dict]] = None,
     id: Optional[str] = None,
 ) -> dict[str, Any]:
     """Append a saved search and return it. Use id when updating."""
@@ -48,6 +49,7 @@ def save_search(
         "tags": list(tags) if tags else [],
         "assignedTo": assigned_to,
         "query": (query or "").strip() or None,
+        "customFieldFilters": list(custom_field_filters) if custom_field_filters else [],
     }
     searches.append(record)
     _path(ensure_dir=True).write_text(json.dumps(searches, indent=2))
