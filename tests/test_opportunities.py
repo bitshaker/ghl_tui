@@ -21,7 +21,7 @@ class TestOpportunityCommands:
         assert "/opportunities/search" in call_args[0][0]
 
     def test_opportunities_list_with_filters(self, runner, mock_token, mock_location_id, mock_opportunity_client, sample_opportunity):
-        """Test listing opportunities with filters."""
+        """Test listing opportunities with filters (filtering is client-side; API is called without filter params)."""
         mock_opportunity_client.get.return_value = {"opportunities": [sample_opportunity]}
 
         result = runner.invoke(
@@ -38,12 +38,15 @@ class TestOpportunityCommands:
             ],
         )
         assert result.exit_code == 0
+        assert "Deal Name" in result.output
         mock_opportunity_client.get.assert_called_once()
         call_args = mock_opportunity_client.get.call_args
-        params = call_args[1]["params"]
-        assert params["pipelineId"] == "pipeline-123"
-        assert params["status"] == "open"
-        assert params["limit"] == 10
+        assert "/opportunities/search" in call_args[0][0]
+        params = call_args[1].get("params") or {}
+        # API does not accept pipeline/status/limit; filtering is done client-side
+        assert "pipelineId" not in params
+        assert "status" not in params
+        assert "limit" not in params
 
     def test_opportunities_get(self, runner, mock_token, mock_location_id, mock_opportunity_client, sample_opportunity):
         """Test getting an opportunity by ID."""
