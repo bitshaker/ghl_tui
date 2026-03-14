@@ -1,12 +1,14 @@
-"""Tests for service layer (contacts, opportunities, pipelines)."""
+"""Tests for service layer (contacts, opportunities, pipelines, custom_fields, tasks)."""
 
 from unittest.mock import MagicMock
 
 import pytest
 
 from ghl.services import contacts as contact_svc
+from ghl.services import custom_fields as custom_fields_svc
 from ghl.services import opportunities as opp_svc
 from ghl.services import pipelines as pipeline_svc
+from ghl.services import tasks as tasks_svc
 
 
 @pytest.fixture
@@ -110,3 +112,60 @@ class TestPipelinesService:
         out = pipeline_svc.list_stages(mock_client, "p1")
         assert len(out) == 1
         assert out[0]["name"] == "Lead"
+
+
+class TestCustomFieldsService:
+    def test_list_custom_fields(self, mock_client):
+        mock_client.get.return_value = {
+            "customFields": [
+                {"id": "cf-1", "name": "Lead Source", "fieldType": "dropdown", "entityType": "contact"},
+            ]
+        }
+        out = custom_fields_svc.list_custom_fields(mock_client, "loc-1")
+        assert len(out) == 1
+        assert out[0]["name"] == "Lead Source"
+        mock_client.get.assert_called_once()
+        assert "/locations/loc-1/customFields" in mock_client.get.call_args[0][0]
+
+    def test_field_has_options(self):
+        assert custom_fields_svc.field_has_options({"fieldType": "dropdown", "picklistOptions": ["A", "B"]}) is True
+        assert custom_fields_svc.field_has_options({"fieldType": "text"}) is False
+
+    def test_get_field_options_string_list(self):
+        field = {"picklistOptions": ["Red", "Green", "Blue"]}
+        out = custom_fields_svc.get_field_options(field)
+        assert out == [("Red", "Red"), ("Green", "Green"), ("Blue", "Blue")]
+
+    def test_extract_custom_values_from_contact(self):
+        contact = {"customField": [{"customFieldId": "f1", "value": "v1"}]}
+        out = custom_fields_svc.extract_custom_values_from_contact(contact)
+        assert out == {"f1": "v1"}
+
+
+class TestTasksService:
+    def test_search_tasks(self, mock_client):
+        mock_client.post.return_value = {
+            "tasks": [
+                {"_id": "t1", "title": "Task 1", "contactDetails": {"firstName": "John", "lastName": "Doe"}},
+            ],
+            "total": 1,
+        }
+        out, total = tasks_svc.search_tasks(mock_client, "loc-1", limit=10)
+        assert len(out) == 1
+        assert out[0]["id"] == "t1"
+        assert out[0]["title"] == "Task 1"
+        assert out[0]["contactName"] == "John Doe"
+        assert total == 1
+        mock_client.post.assert_called_once()
+        assert "/locations/loc-1/tasks/search" in mock_client.post.call_args[0][0]
+        assert mock_client.post.call_args[1]["json"]["limit"] == 10
+
+    def test_search_tasks_with_status_and_assignee(self, mock_client):
+        mock_client.post.return_value = {"tasks": [], "total": 0}
+        tasks_svc.search_tasks(
+            mock_client, "loc-1", assignee_id="user-1", status="pending", query="call"
+        )
+        body = mock_client.post.call_args[1]["json"]
+        assert body["assignedTo"] == ["user-1"]
+        assert body["completed"] is False
+        assert body["query"] == "call"

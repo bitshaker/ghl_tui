@@ -5,28 +5,26 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GHLConfig(BaseModel):
     """Configuration model for GHL CLI."""
 
+    model_config = ConfigDict(extra="ignore")
+
     location_id: Optional[str] = Field(default=None, description="Default location/sub-account ID")
     api_version: str = Field(default="2021-07-28", description="API version header")
     output_format: str = Field(default="table", description="Default output format")
-
-    class Config:
-        extra = "ignore"
 
 
 class ProfileModel(BaseModel):
     """A single GHL profile (token + location)."""
 
+    model_config = ConfigDict(extra="ignore")
+
     api_token: str
     location_id: str
-
-    class Config:
-        extra = "ignore"
 
 
 class ConfigManager:

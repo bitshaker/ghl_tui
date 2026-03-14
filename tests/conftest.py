@@ -143,6 +143,26 @@ def mock_tag_client():
 
 
 @pytest.fixture
+def mock_tasks_client():
+    """Mock GHLClient for tasks."""
+    with patch("ghl.commands.tasks.GHLClient") as mock:
+        client_instance = MagicMock()
+        mock.return_value.__enter__.return_value = client_instance
+        mock.return_value.__exit__.return_value = None
+        yield client_instance
+
+
+@pytest.fixture
+def mock_custom_fields_client():
+    """Mock GHLClient for custom-fields."""
+    with patch("ghl.commands.custom_fields.GHLClient") as mock:
+        client_instance = MagicMock()
+        mock.return_value.__enter__.return_value = client_instance
+        mock.return_value.__exit__.return_value = None
+        yield client_instance
+
+
+@pytest.fixture
 def sample_contact():
     """Sample contact data."""
     return {
@@ -265,6 +285,7 @@ def sample_user():
     """Sample user data."""
     return {
         "id": "user-123",
+        "name": "Admin User",
         "firstName": "Admin",
         "lastName": "User",
         "email": "admin@example.com",
