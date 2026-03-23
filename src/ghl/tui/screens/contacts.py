@@ -27,12 +27,17 @@ from ..contact_opportunities import ContactOpportunitiesModal
 from ..contact_tag import AddTagModal, RemoveTagModal
 from ..contact_tasks import ContactTasksModal, task_display_text
 from ..text_utils import html_to_plain
+from ..widgets.rate_limit import HeaderBar
 
 
 def _contact_label(c: dict) -> str:
     name = (c.get("firstName") or "") + " " + (c.get("lastName") or "")
     name = name.strip() or c.get("name") or c.get("email") or c.get("id") or "—"
-    return name[:40].strip().title()
+    name = name[:40].strip().title()
+    t = (c.get("type") or "").strip()
+    if t:
+        return f"{name} ({t})"[:56]
+    return name
 
 
 class ContactDetail(Static):
@@ -88,13 +93,16 @@ class ContactDetail(Static):
 
         email_val = contact.get("email") or ""
         phone_val = contact.get("phone") or ""
+        type_val = (contact.get("type") or "").strip()
         email_part = email_val if email_val else "—"
         phone_part = phone_val if phone_val else "—"
+        type_part = type_val if type_val else "—"
 
         lines = [
             f"[bold]{_contact_label(contact)}[/bold]  ({contact.get('id', '')})",
             f"email: {email_part}",
             f"phone: {phone_part}",
+            f"type: {type_part}",
         ]
         company = (contact.get("companyName") or "").strip()
         if company:
@@ -413,7 +421,7 @@ class ContactsView(Container):
         if isinstance(result, tuple) and len(result) == 6:
             contact, notes, tasks, custom_field_defs, custom_values, rli = result
             try:
-                header = self.screen.query_one("#header_bar")
+                header = self.screen.query_one("#header_bar", HeaderBar)
                 header.update_rate_limit(rli)
             except Exception:
                 pass
@@ -430,7 +438,7 @@ class ContactsView(Container):
         if isinstance(result, tuple) and len(result) == 4:
             contacts, total, page, rli = result
             try:
-                header = self.screen.query_one("#header_bar")
+                header = self.screen.query_one("#header_bar", HeaderBar)
                 header.update_rate_limit(rli)
             except Exception:
                 pass
@@ -536,6 +544,7 @@ class ContactsView(Container):
         location_id = get_location_id()
         users: list[dict] = []
         custom_field_defs: list[dict] = []
+        type_options: list[tuple[str, str]] = []
         try:
             with GHLClient(get_token(), location_id) as client:
                 users = users_svc.list_users(client)
@@ -546,6 +555,7 @@ class ContactsView(Container):
                 custom_field_defs = custom_fields_svc.list_custom_fields(
                     client, location_id
                 )
+                type_options = contact_svc.list_contact_type_options(client, location_id)
         except Exception:
             pass  # modal still shows standard fields
         self.app.push_screen(
@@ -553,6 +563,7 @@ class ContactsView(Container):
                 contact=None,
                 users=users or [],
                 custom_field_defs=custom_field_defs or [],
+                contact_type_options=type_options,
             ),
             on_done,
         )
@@ -570,12 +581,19 @@ class ContactsView(Container):
                 self._current_page = 1
                 self.load_contacts(page_override=1)
 
+        location_id = get_location_id()
+        users: list[dict] = []
+        type_options: list[tuple[str, str]] = []
         try:
-            with GHLClient(get_token(), get_location_id()) as client:
+            with GHLClient(get_token(), location_id) as client:
                 users = users_svc.list_users(client)
         except Exception as e:
             self.notify(f"Could not load users: {e}", severity="error")
-            users = []
+        try:
+            with GHLClient(get_token(), location_id) as client:
+                type_options = contact_svc.list_contact_type_options(client, location_id)
+        except Exception:
+            pass
         self.app.push_screen(
             ContactEditModal(
                 contact=detail.contact,
@@ -583,6 +601,7 @@ class ContactsView(Container):
                 custom_values_map=detail.custom_values_map,
                 custom_value_id_map=detail.custom_value_id_map,
                 users=users or [],
+                contact_type_options=type_options,
             ),
             on_done,
         )

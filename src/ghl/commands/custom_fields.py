@@ -47,11 +47,7 @@ def list_custom_fields_cmd(ctx, raw: bool):
     if not isinstance(fields, list):
         fields = []
 
-    # Filter to contact-scoped for consistency with TUI
-    fields = [
-        f for f in fields
-        if f.get("entityType", "contact") == "contact" or "entityType" not in f
-    ]
+    fields = [f for f in fields if custom_fields_svc.is_contact_scoped_custom_field(f)]
 
     if output_format == "json":
         output_json(fields)

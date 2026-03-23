@@ -25,6 +25,7 @@ class ContactEditModal(ModalScreen[dict]):
         custom_values_map: Optional[dict[str, str]] = None,
         custom_value_id_map: Optional[dict[str, str]] = None,
         users: Optional[list[dict]] = None,
+        contact_type_options: Optional[list[tuple[str, str]]] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -34,6 +35,7 @@ class ContactEditModal(ModalScreen[dict]):
         self._custom_values_map = custom_values_map or {}
         self._custom_value_id_map = custom_value_id_map or {}
         self._users = users or []
+        self._contact_type_options = contact_type_options or []
         self._custom_field_ids: list[str] = []  # fid for each custom field, in order
         self._dropdown_field_ids: set[str] = set()  # fields rendered as Select
 
@@ -66,6 +68,22 @@ class ContactEditModal(ModalScreen[dict]):
                 placeholder="+1…",
                 id="contact-phone",
             )
+            cur_ctype = (self._contact or {}).get("type") or ""
+            if isinstance(cur_ctype, str):
+                cur_ctype = cur_ctype.strip()
+            else:
+                cur_ctype = str(cur_ctype).strip() if cur_ctype is not None else ""
+            ctype_opts: list[tuple[str, str]] = [("— (none)", "")]
+            ctype_opts.extend(self._contact_type_options)
+            if cur_ctype and not any(v == cur_ctype for (_, v) in ctype_opts):
+                ctype_opts.append((cur_ctype, cur_ctype))
+            yield Label("Contact type")
+            yield Select(
+                ctype_opts,
+                value=cur_ctype or "",
+                allow_blank=True,
+                id="contact-type",
+            )
             yield Label("Company")
             yield Input(
                 value=(self._contact or {}).get("companyName", ""),
@@ -97,6 +115,9 @@ class ContactEditModal(ModalScreen[dict]):
             self._custom_field_ids = []
             self._dropdown_field_ids = set()
             for field in self._custom_field_defs:
+                fk = (field.get("fieldKey") or field.get("key") or "").strip().lower()
+                if fk == "contact.type":
+                    continue
                 fid = str(field.get("id") or field.get("customFieldId", ""))
                 if not fid:
                     continue
@@ -160,6 +181,9 @@ class ContactEditModal(ModalScreen[dict]):
         assigned_sel = self.query_one("#contact-assigned", Select)
         assigned = (assigned_sel.value or "").strip() if assigned_sel.value is not None else ""
         assigned_to = assigned or None
+        type_sel = self.query_one("#contact-type", Select)
+        type_raw = (type_sel.value or "").strip() if type_sel.value is not None else ""
+        contact_type = type_raw if type_raw else None
         if not self._is_edit and not email and not phone:
             self.notify("Email or phone required", severity="error")
             return
@@ -190,6 +214,7 @@ class ContactEditModal(ModalScreen[dict]):
                     company_name=company,
                     source=source,
                     assigned_to=assigned_to,
+                    contact_type=contact_type,
                     custom_fields=custom_fields_payload if custom_fields_payload else None,
                 )
                 updated = contact_svc.get_contact(client, self._contact["id"])
@@ -218,6 +243,7 @@ class ContactEditModal(ModalScreen[dict]):
                     company_name=company,
                     source=source,
                     assigned_to=assigned_to,
+                    contact_type=contact_type,
                     custom_fields=custom_fields_payload if custom_fields_payload else None,
                 )
                 self.dismiss(created)

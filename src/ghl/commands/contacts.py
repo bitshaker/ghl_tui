@@ -19,6 +19,7 @@ CONTACT_COLUMNS = [
     ("lastName", "Last Name"),
     ("email", "Email"),
     ("phone", "Phone"),
+    ("type", "Type"),
     ("tags", "Tags"),
 ]
 
@@ -29,6 +30,7 @@ CONTACT_FIELDS = [
     ("name", "Full Name"),
     ("email", "Email"),
     ("phone", "Phone"),
+    ("type", "Type"),
     ("companyName", "Company"),
     ("address1", "Address"),
     ("city", "City"),

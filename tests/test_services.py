@@ -51,6 +51,56 @@ class TestContactsService:
         assert body["email"] == "x@y.com"
         assert body["firstName"] == "X"
 
+    def test_create_contact_with_type(self, mock_client):
+        mock_client.post.return_value = {"contact": {"id": "c2"}}
+        contact_svc.create_contact(
+            mock_client,
+            location_id="loc1",
+            email="x@y.com",
+            contact_type="buyer",
+        )
+        body = mock_client.post.call_args[1]["json"]
+        assert body["type"] == "buyer"
+
+    def test_update_contact_sets_type(self, mock_client):
+        mock_client.put.return_value = {"contact": {"id": "c1"}}
+        contact_svc.update_contact(mock_client, "c1", contact_type="seller")
+        body = mock_client.put.call_args[1]["json"]
+        assert body["type"] == "seller"
+
+    def test_update_contact_omits_type_when_not_passed(self, mock_client):
+        mock_client.put.return_value = {"contact": {"id": "c1"}}
+        contact_svc.update_contact(mock_client, "c1", first_name="Z")
+        body = mock_client.put.call_args[1]["json"]
+        assert "type" not in body
+
+    def test_list_contact_type_options(self, mock_client):
+        mock_client.get.return_value = {
+            "customFields": [
+                {"fieldKey": "contact.type", "picklistOptions": ["buyer", "seller"]},
+            ]
+        }
+        out = contact_svc.list_contact_type_options(mock_client, "loc1")
+        assert out == [("buyer", "buyer"), ("seller", "seller")]
+        mock_client.get.assert_called_once()
+        call = mock_client.get.call_args
+        assert "customFields" in call[0][0]
+        assert call[1]["params"]["model"] == "all"
+
+    def test_list_contact_type_options_harvests_when_no_field(self, mock_client):
+        mock_client.get.return_value = {"customFields": []}
+        mock_client.post.return_value = {
+            "contacts": [
+                {"id": "a", "type": "seller"},
+                {"id": "b", "type": "buyer"},
+                {"id": "c", "type": "buyer"},
+            ],
+            "total": 3,
+        }
+        out = contact_svc.list_contact_type_options(mock_client, "loc1")
+        assert out == [("buyer", "buyer"), ("seller", "seller")]
+        mock_client.post.assert_called()
+
     def test_add_tag(self, mock_client):
         mock_client.get.return_value = {"contact": {"id": "c1", "tags": ["A"]}}
         mock_client.put.return_value = {}
@@ -140,6 +190,22 @@ class TestCustomFieldsService:
         contact = {"customField": [{"customFieldId": "f1", "value": "v1"}]}
         out = custom_fields_svc.extract_custom_values_from_contact(contact)
         assert out == {"f1": "v1"}
+
+    def test_build_custom_values_map_maps_field_key_from_custom_data(self):
+        defs = [
+            {
+                "id": "cf-uuid-1",
+                "name": "Contact Type",
+                "fieldKey": "contact.type",
+            }
+        ]
+        contact = {"customData": {"contact.type": "Customer"}}
+        out = custom_fields_svc.build_custom_values_map(contact, [], defs)
+        assert out == {"cf-uuid-1": "Customer"}
+
+    def test_is_contact_scoped_custom_field_entity_type_case(self):
+        assert custom_fields_svc.is_contact_scoped_custom_field({"entityType": "Contact"}) is True
+        assert custom_fields_svc.is_contact_scoped_custom_field({"entityType": "opportunity"}) is False
 
 
 class TestTasksService:

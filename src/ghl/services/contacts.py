@@ -9,6 +9,89 @@ if TYPE_CHECKING:
     from ..client import GHLClient
 
 
+def _options_from_contact_type_field(field: dict) -> list[tuple[str, str]]:
+    """Parse picklist options from a customFields row for native contact.type (if GHL exposes it)."""
+    from . import custom_fields as custom_fields_svc
+
+    opts = custom_fields_svc.get_field_options(field)
+    if opts:
+        return opts
+    raw = field.get("picklistOptions")
+    if isinstance(raw, list) and raw:
+        return [(str(x), str(x)) for x in raw if x is not None and str(x).strip()]
+    return []
+
+
+def _harvest_contact_types_from_search(
+    client: "GHLClient",
+    location_id: str,
+    *,
+    max_pages: int = 3,
+    page_limit: int = 100,
+) -> list[tuple[str, str]]:
+    """
+    Collect distinct top-level ``type`` values from contacts in this location.
+
+    GHL often does **not** include the managed ``contact.type`` field in
+    ``GET /locations/.../customFields``, so the CRM picklist is not available via API.
+    Sampling contacts is the best-effort way to populate the TUI dropdown.
+    """
+    seen: dict[str, str] = {}
+    page = 1
+    while page <= max_pages:
+        contacts, total = contacts_search(
+            client,
+            location_id,
+            page=page,
+            page_limit=page_limit,
+        )
+        for c in contacts:
+            raw = c.get("type")
+            if raw is None:
+                continue
+            s = str(raw).strip()
+            if not s:
+                continue
+            key = s.lower()
+            if key not in seen:
+                seen[key] = s
+        if not contacts or len(contacts) < page_limit:
+            break
+        if page * page_limit >= total:
+            break
+        page += 1
+    values = sorted(seen.values(), key=lambda x: x.lower())
+    return [(v, v) for v in values]
+
+
+def list_contact_type_options(client: "GHLClient", location_id: str) -> list[tuple[str, str]]:
+    """
+    (label, value) pairs for the native contact ``type`` field.
+
+    1. Prefer picklist from ``GET /locations/{id}/customFields`` when a row has
+       ``fieldKey`` / ``key`` ``contact.type`` (often absent for platform-managed types).
+    2. Otherwise merge types seen on contacts via ``POST /contacts/search`` (paginated).
+    """
+    response = client.get(
+        f"/locations/{location_id}/customFields",
+        params={"model": "all"},
+        include_location_id=False,
+    )
+    fields = response.get("customFields", response.get("fields", []))
+    if not isinstance(fields, list):
+        fields = []
+    from_api: list[tuple[str, str]] = []
+    for f in fields:
+        fk = (f.get("fieldKey") or f.get("key") or "").strip().lower()
+        if fk != "contact.type":
+            continue
+        from_api = _options_from_contact_type_field(f)
+        break
+    if from_api:
+        return from_api
+    return _harvest_contact_types_from_search(client, location_id)
+
+
 def list_contacts(client: "GHLClient", limit: int = 20, query: Optional[str] = None) -> list[dict]:
     """List contacts in the location."""
     params: dict = {"limit": limit}
@@ -38,6 +121,7 @@ def create_contact(
     tags: Optional[list[str]] = None,
     assigned_to: Optional[str] = None,
     custom_fields: Optional[list[dict]] = None,
+    contact_type: Optional[str] = None,
 ) -> dict:
     """Create a new contact. Requires at least email or phone."""
     data: dict = {"locationId": location_id}
@@ -59,6 +143,8 @@ def create_contact(
         data["tags"] = tags
     if assigned_to:
         data["assignedTo"] = assigned_to
+    if contact_type:
+        data["type"] = contact_type
     if custom_fields:
         data["customFields"] = custom_fields
     response = client.post("/contacts/", json=data)
@@ -80,12 +166,14 @@ def update_contact(
     source: Optional[str] = None,
     assigned_to: Union[str, None, type(_ASSIGNED_OMIT)] = _ASSIGNED_OMIT,
     custom_fields: Optional[list[dict]] = None,
+    contact_type: Optional[str] = None,
 ) -> dict:
     """Update an existing contact. Only provided fields are updated.
 
     assigned_to: user id to assign, None to clear assignment, or omit to leave unchanged.
     custom_fields: optional list of { id, key, field_value } for custom field
     values (sent in Update Contact body; no separate custom-values scope needed).
+    contact_type: when set (non-empty), sent as top-level ``type`` on the contact.
     """
     data: dict = {}
     if email is not None:
@@ -102,6 +190,8 @@ def update_contact(
         data["source"] = source
     if assigned_to is not _ASSIGNED_OMIT:
         data["assignedTo"] = assigned_to
+    if contact_type is not None and str(contact_type).strip():
+        data["type"] = str(contact_type).strip()
     if custom_fields is not None and len(custom_fields) > 0:
         data["customFields"] = custom_fields
     response = client.put(f"/contacts/{contact_id}", json=data)

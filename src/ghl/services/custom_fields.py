@@ -119,6 +119,22 @@ def _is_hidden_custom_field(field: dict) -> bool:
     return False
 
 
+def _resolved_entity_type(field: dict) -> str:
+    """Normalize entityType / model to a lowercase string (default contact)."""
+    for key in ("entityType", "model"):
+        v = field.get(key)
+        if v is not None and str(v).strip():
+            return str(v).strip().lower()
+    return "contact"
+
+
+def is_contact_scoped_custom_field(field: dict) -> bool:
+    """True if this definition is for contacts (matches GHL list + legacy rows without entityType)."""
+    if _resolved_entity_type(field) == "contact":
+        return True
+    return "entityType" not in field
+
+
 def list_custom_fields(client: "GHLClient", location_id: str) -> list[dict]:
     """List custom field definitions for a location (contact-scoped only)."""
     path = f"/locations/{location_id}/customFields"
@@ -126,11 +142,7 @@ def list_custom_fields(client: "GHLClient", location_id: str) -> list[dict]:
     fields = response.get("customFields", response.get("fields", []))
     if not isinstance(fields, list):
         return []
-    # Filter to contact entity type (entityType or model)
-    contact_fields = [
-        f for f in fields
-        if f.get("entityType", f.get("model", "contact")) == "contact" or "entityType" not in f
-    ]
+    contact_fields = [f for f in fields if is_contact_scoped_custom_field(f)]
     # Exclude hidden fields (e.g. Notes custom field; we use contact notes instead)
     return [f for f in contact_fields if not _is_hidden_custom_field(f)]
 
@@ -206,6 +218,19 @@ def extract_custom_values_from_contact(contact: dict) -> dict[str, str]:
     return result
 
 
+def _field_key_to_id_map(field_definitions: list[dict]) -> dict[str, str]:
+    """Map normalized fieldKey/key -> custom field id (GHL customData often uses fieldKey, e.g. contact.type)."""
+    out: dict[str, str] = {}
+    for f in field_definitions:
+        fid = str(f.get("id") or f.get("customFieldId", ""))
+        if not fid:
+            continue
+        for fk in (f.get("fieldKey"), f.get("key")):
+            if fk and str(fk).strip():
+                out[str(fk).strip().lower()] = fid
+    return out
+
+
 def build_custom_values_map(
     contact: dict,
     custom_values: list[dict],
@@ -221,6 +246,7 @@ def build_custom_values_map(
         for f in field_definitions
         if f.get("id") or f.get("customFieldId")
     }
+    key_to_id = _field_key_to_id_map(field_definitions)
 
     # From customValues API: { customFieldId, value, id } or { customField: { id }, value }
     for cv in custom_values:
@@ -238,9 +264,13 @@ def build_custom_values_map(
 
     # From contact object
     from_contact = extract_custom_values_from_contact(contact)
-    for fid, val in from_contact.items():
-        if fid in field_ids and fid not in result:
-            result[fid] = val
+    for raw_key, val in from_contact.items():
+        if raw_key in field_ids and raw_key not in result:
+            result[raw_key] = val
+            continue
+        mapped = key_to_id.get(str(raw_key).strip().lower())
+        if mapped and mapped in field_ids and mapped not in result:
+            result[mapped] = val
 
     # Ensure all defined fields have an entry
     for f in field_definitions:
