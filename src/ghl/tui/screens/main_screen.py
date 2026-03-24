@@ -8,7 +8,7 @@ from ..widgets.rate_limit import HeaderBar
 
 
 class TabBar(Static):
-    """Simple tab bar for Contacts | Pipeline Board."""
+    """Simple tab bar for Contacts | Pipeline Board | Tasks | Calendar."""
 
     DEFAULT_CSS = """
     TabBar {
@@ -31,10 +31,12 @@ class TabBar(Static):
 
     def render(self) -> str:
         if self._active == "contacts":
-            return "  * Contacts  |  Pipeline Board  |  Tasks  "
+            return "  * Contacts  |  Pipeline Board  |  Tasks  |  Calendar  "
         if self._active == "pipeline":
-            return "  Contacts  |  * Pipeline Board  |  Tasks  "
-        return "  Contacts  |  Pipeline Board  |  * Tasks  "
+            return "  Contacts  |  * Pipeline Board  |  Tasks  |  Calendar  "
+        if self._active == "tasks":
+            return "  Contacts  |  Pipeline Board  |  * Tasks  |  Calendar  "
+        return "  Contacts  |  Pipeline Board  |  Tasks  |  * Calendar  "
 
     def set_active(self, tab: str) -> None:
         self._active = tab
@@ -49,6 +51,7 @@ class MainScreen(Screen):
         ("1", "show_contacts", "Contacts"),
         ("2", "show_pipeline", "Pipeline"),
         ("3", "show_tasks", "Tasks"),
+        ("4", "show_calendar", "Calendar"),
     ]
 
     CSS = """
@@ -91,6 +94,9 @@ class MainScreen(Screen):
     def action_show_tasks(self) -> None:
         self._switch_tab("tasks")
 
+    def action_show_calendar(self) -> None:
+        self._switch_tab("calendar")
+
     def _switch_tab(self, tab: str) -> None:
         if tab == self._current_tab:
             return
@@ -104,9 +110,12 @@ class MainScreen(Screen):
         elif tab == "pipeline":
             from .pipeline_board import PipelineBoardView
             content.mount(PipelineBoardView())
-        else:
+        elif tab == "tasks":
             from .tasks import TasksView
             content.mount(TasksView())
+        else:
+            from .calendar import CalendarView
+            content.mount(CalendarView())
 
     def on_mount(self) -> None:
         from .contacts import ContactsView

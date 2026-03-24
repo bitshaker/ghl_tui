@@ -9,6 +9,7 @@ from ..client import GHLClient
 from ..config import config_manager
 from ..options import output_format_options
 from ..output import output_data, print_success
+from ..services import calendars as calendars_svc
 
 CALENDAR_COLUMNS = [
     ("id", "ID"),
@@ -110,11 +111,19 @@ def get_slots(ctx, calendar_id: str, start: str, end: Optional[str], timezone: O
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        params = {"startDate": start, "endDate": end or start}
+        end_day = end or start
+        params = {
+            "startDate": calendars_svc.ymd_to_utc_start_ms(start),
+            "endDate": calendars_svc.ymd_to_utc_end_ms_inclusive(end_day),
+        }
         if timezone:
             params["timezone"] = timezone
 
-        response = client.get(f"/calendars/{calendar_id}/free-slots", params=params)
+        response = client.get(
+            f"/calendars/{calendar_id}/free-slots",
+            params=params,
+            include_location_id=False,
+        )
 
         # Response contains slots grouped by date
         slots = response.get("slots", response)
@@ -170,21 +179,24 @@ def list_appointments(
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        params = {"limit": limit}
-        if calendar_id:
-            params["calendarId"] = calendar_id
+        appointments_list = calendars_svc.list_calendar_events(
+            client,
+            calendar_id=calendar_id,
+            start=start,
+            end=end,
+        )
         if contact_id:
-            params["contactId"] = contact_id
-        if start:
-            params["startDate"] = start
-        if end:
-            params["endDate"] = end
+            appointments_list = [e for e in appointments_list if e.get("contactId") == contact_id]
+        if limit and limit > 0:
+            appointments_list = appointments_list[:limit]
 
-        response = client.get("/calendars/events/appointments", params=params)
-        appointments_list = response.get("appointments", response.get("events", []))
+        display_rows = [
+            {**ev, "status": ev.get("status") or ev.get("appointmentStatus")}
+            for ev in appointments_list
+        ]
 
         output_data(
-            appointments_list,
+            display_rows,
             columns=APPOINTMENT_COLUMNS,
             format=output_format,
             title="Appointments",

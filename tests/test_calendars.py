@@ -40,20 +40,30 @@ class TestCalendarCommands:
         mock_calendar_client.get.assert_called_once()
         call_args = mock_calendar_client.get.call_args
         assert "/calendars/calendar-123/free-slots" in call_args[0][0]
-        assert call_args[1]["params"]["startDate"] == "2024-01-20"
+        assert isinstance(call_args[1]["params"]["startDate"], int)
+        assert isinstance(call_args[1]["params"]["endDate"], int)
+        assert call_args[1].get("include_location_id") is False
 
 
 class TestAppointmentCommands:
     """Test appointment management commands."""
 
     def test_appointments_list(self, runner, mock_token, mock_location_id, mock_calendar_client, sample_appointment):
-        """Test listing appointments."""
-        mock_calendar_client.get.return_value = {"appointments": [sample_appointment]}
+        """Test listing appointments (GET /calendars/events per calendar)."""
+
+        def mock_get(path, params=None, **kwargs):
+            if path == "/calendars/":
+                return {"calendars": [{"id": "calendar-123", "name": "Main"}]}
+            if path == "/calendars/events":
+                return {"events": [sample_appointment]}
+            return {}
+
+        mock_calendar_client.get.side_effect = mock_get
 
         result = runner.invoke(main, ["calendars", "appointments", "list"])
         assert result.exit_code == 0
         assert "Meeting" in result.output
-        mock_calendar_client.get.assert_called_once()
+        assert mock_calendar_client.get.call_count >= 1
 
     def test_appointments_get(self, runner, mock_token, mock_location_id, mock_calendar_client, sample_appointment):
         """Test getting an appointment by ID."""
