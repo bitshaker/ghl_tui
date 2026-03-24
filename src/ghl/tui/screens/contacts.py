@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from textual import work
+from textual.binding import Binding
 from textual.containers import Container, Vertical
 from textual.widgets import (
     Input,
@@ -41,7 +42,7 @@ def _contact_label(c: dict) -> str:
 
 
 class ContactDetail(Static):
-    """Right-hand panel showing selected contact details. Use m/p/S keys to open email/phone/SMS."""
+    """Right-hand panel showing selected contact details; shortcuts listed at the bottom of the pane."""
 
     DEFAULT_CSS = """
     ContactDetail {
@@ -225,20 +226,20 @@ class ContactsView(Container):
     """Contacts browse, search, and detail panel."""
 
     BINDINGS = [
-        ("n", "notes", "Notes"),
-        ("t", "tasks", "Tasks"),
+        Binding("n", "notes", "Notes", show=False),
+        Binding("t", "tasks", "Tasks", show=False),
         ("N", "new_contact", "New"),
         ("e", "edit_contact", "Edit"),
-        ("a", "add_tag", "Add tag"),
-        ("r", "remove_tag", "Remove tag"),
-        ("o", "opportunities", "Opportunities"),
+        Binding("a", "add_tag", "Add tag", show=False),
+        Binding("r", "remove_tag", "Remove tag", show=False),
+        Binding("o", "opportunities", "Opportunities", show=False),
         ("R", "refresh_contacts", "Refresh"),
         ("/", "focus_search", "Search"),
         ("f", "filter_contacts", "Filter"),
         ("s", "saved_searches", "Saved"),
-        ("m", "open_email", "Mail"),
-        ("p", "open_phone", "Phone"),
-        ("S", "open_sms", "SMS"),
+        Binding("m", "open_email", "Mail", show=False),
+        Binding("p", "open_phone", "Phone", show=False),
+        Binding("S", "open_sms", "SMS", show=False),
         ("]", "next_page", "Next page"),
         ("[", "previous_page", "Prev page"),
     ]
