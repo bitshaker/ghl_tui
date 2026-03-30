@@ -72,6 +72,41 @@ ghl completion              # show instructions
 ghl completion --shell zsh  # output script (for eval or saving to a file)
 ```
 
+### HTTP debug logging
+
+The shared API client can log each request and response (method, path, query params, JSON body, status, and response body preview). The **Authorization** header is never printed in full (only `Bearer ***`).
+
+| Variable | Purpose |
+|----------|---------|
+| `GHL_DEBUG_HTTP` | Set to `1`, `true`, `yes`, or `on` to enable logging. Set to `stderr` to send logs to **stderr** instead of a file (see below). |
+| `GHL_DEBUG` | Same as enabling `GHL_DEBUG_HTTP=1` (convenience alias). |
+| `GHL_DEBUG_HTTP_TARGET` | Set to `stderr` to force stderr output even when `GHL_DEBUG_HTTP` is `1`. |
+| `GHL_DEBUG_HTTP_LOG` | Path to the log file (default: `~/.ghl_tui/http-debug.log`). |
+
+**Default behavior:** logs are **appended to a file** so the full-screen TUI is not corrupted. Writing HTTP traces to **stderr** while `ghl tui` runs will garble the terminal (alternate screen).
+
+**TUI — inspect traffic in another terminal:**
+
+```bash
+GHL_DEBUG_HTTP=1 ghl tui
+# elsewhere:
+tail -f ~/.ghl_tui/http-debug.log
+```
+
+**CLI — stderr is fine (no full-screen UI):**
+
+```bash
+GHL_DEBUG_HTTP=stderr ghl calendars list
+# or
+GHL_DEBUG_HTTP=1 GHL_DEBUG_HTTP_TARGET=stderr ghl contacts list
+```
+
+**Custom log path:**
+
+```bash
+GHL_DEBUG_HTTP=1 GHL_DEBUG_HTTP_LOG=/tmp/ghl-api.log ghl tui
+```
+
 ## Required Scopes
 
 When creating your Private Integration, select these scopes based on the features you need. These are some basic ones that will make most things work:

@@ -60,7 +60,7 @@ class MainScreen(Screen):
     }
     #content {
         width: 100%;
-        height: auto;
+        height: 1fr;
         min-height: 1;
     }
     """

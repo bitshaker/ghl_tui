@@ -78,7 +78,7 @@ class TasksView(Container):
     DEFAULT_CSS = """
     TasksView {
         width: 100%;
-        height: auto;
+        height: 1fr;
         layout: vertical;
     }
     #tasks-toolbar {

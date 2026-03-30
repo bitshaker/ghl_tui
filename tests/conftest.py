@@ -10,6 +10,15 @@ from click.testing import CliRunner
 
 from ghl.cli import main
 from ghl.config import config_manager
+from ghl.services.calendars import invalidate_location_calendars_cache
+
+
+@pytest.fixture(autouse=True)
+def clear_calendar_list_cache():
+    """Prevent cross-test leakage of GET /calendars/ TTL cache."""
+    invalidate_location_calendars_cache(None)
+    yield
+    invalidate_location_calendars_cache(None)
 
 
 @pytest.fixture

@@ -94,7 +94,7 @@ class PipelineBoardView(Container):
     DEFAULT_CSS = """
     PipelineBoardView {
         width: 100%;
-        height: auto;
+        height: 1fr;
         layout: vertical;
     }
     #board-toolbar {
@@ -103,7 +103,8 @@ class PipelineBoardView(Container):
     }
     #board-columns {
         layout: horizontal;
-        height: auto;
+        height: 1fr;
+        min-height: 8;
         overflow-x: auto;
     }
     """

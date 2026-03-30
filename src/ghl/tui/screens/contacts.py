@@ -247,12 +247,12 @@ class ContactsView(Container):
     DEFAULT_CSS = """
     ContactsView {
         width: 100%;
-        height: auto;
+        height: 1fr;
         layout: horizontal;
     }
     #contacts-left {
         width: 40%;
-        height: auto;
+        height: 1fr;
         min-width: 24;
         border: solid $primary-darken-2;
         padding: 1;
@@ -263,7 +263,7 @@ class ContactsView(Container):
     }
     #contacts-right {
         width: 1fr;
-        height: auto;
+        height: 1fr;
     }
     """
 

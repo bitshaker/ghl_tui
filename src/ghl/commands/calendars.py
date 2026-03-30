@@ -1,6 +1,7 @@
 """Calendar and appointment management commands."""
 
-from typing import Optional
+from datetime import date
+from typing import Optional, Union
 
 import click
 
@@ -100,19 +101,28 @@ def get_calendar(ctx, calendar_id: str):
 @calendars.command("slots")
 @output_format_options
 @click.argument("calendar_id")
-@click.option("--start", "-s", required=True, help="Start date (YYYY-MM-DD)")
+@click.option(
+    "--start",
+    "-s",
+    required=False,
+    default=None,
+    help="Start date (YYYY-MM-DD); defaults to today (local date)",
+)
 @click.option("--end", "-e", help="End date (YYYY-MM-DD), defaults to start date")
 @click.option("--timezone", "-tz", help="Timezone (e.g., America/New_York)")
 @click.pass_context
-def get_slots(ctx, calendar_id: str, start: str, end: Optional[str], timezone: Optional[str]):
+def get_slots(
+    ctx, calendar_id: str, start: Optional[str], end: Optional[str], timezone: Optional[str]
+):
     """Get available slots for a calendar."""
     token = get_token()
     location_id = get_location_id()
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
+    start = start or date.today().isoformat()
     with GHLClient(token, location_id) as client:
         end_day = end or start
-        params = {
+        params: dict[str, Union[int, str]] = {
             "startDate": calendars_svc.ymd_to_utc_start_ms(start),
             "endDate": calendars_svc.ymd_to_utc_end_ms_inclusive(end_day),
         }
@@ -134,9 +144,9 @@ def get_slots(ctx, calendar_id: str, start: str, end: Optional[str], timezone: O
             # Flatten slots for table display
             flat_slots = []
             if isinstance(slots, dict):
-                for date, times in slots.items():
+                for day_key, times in slots.items():
                     for slot in times if isinstance(times, list) else [times]:
-                        flat_slots.append({"date": date, "slot": slot})
+                        flat_slots.append({"date": day_key, "slot": slot})
             elif isinstance(slots, list):
                 for slot in slots:
                     flat_slots.append({"slot": slot})
@@ -214,7 +224,10 @@ def get_appointment(ctx, appointment_id: str):
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
-        response = client.get(f"/calendars/events/appointments/{appointment_id}")
+        response = client.get(
+            f"/calendars/events/appointments/{appointment_id}",
+            include_location_id=False,
+        )
         appointment = response.get("appointment", response.get("event", response))
 
         output_data(appointment, format=output_format, single_fields=APPOINTMENT_FIELDS)
@@ -244,10 +257,12 @@ def create_appointment(
     output_format = ctx.obj.get("output_format") or config_manager.config.output_format
 
     with GHLClient(token, location_id) as client:
+        tz_name = calendars_svc.resolve_calendar_timezone(client, calendar_id, None)
         data = {
             "calendarId": calendar_id,
             "contactId": contact_id,
             "selectedSlot": slot,
+            "selectedTimezone": tz_name,
             "locationId": location_id,
         }
 
@@ -294,6 +309,16 @@ def update_appointment(
 
         if slot:
             data["selectedSlot"] = slot
+            appt = client.get(
+                f"/calendars/events/appointments/{appointment_id}",
+                include_location_id=False,
+            )
+            appt_obj = appt.get("appointment", appt.get("event", appt))
+            cal_id = (appt_obj.get("calendarId") or "").strip()
+            if cal_id:
+                data["selectedTimezone"] = calendars_svc.resolve_calendar_timezone(
+                    client, cal_id, None
+                )
         if title:
             data["title"] = title
         if notes:
@@ -304,7 +329,11 @@ def update_appointment(
         if not data:
             raise click.ClickException("No fields to update. Specify at least one option.")
 
-        response = client.put(f"/calendars/events/appointments/{appointment_id}", json=data)
+        response = client.put(
+            f"/calendars/events/appointments/{appointment_id}",
+            json=data,
+            include_location_id=False,
+        )
         appointment = response.get("appointment", response.get("event", response))
 
         print_success(f"Appointment updated: {appointment_id}")
@@ -320,5 +349,8 @@ def delete_appointment(appointment_id: str):
     location_id = get_location_id()
 
     with GHLClient(token, location_id) as client:
-        client.delete(f"/calendars/events/appointments/{appointment_id}")
+        client.delete(
+            f"/calendars/events/appointments/{appointment_id}",
+            include_location_id=False,
+        )
         print_success(f"Appointment deleted: {appointment_id}")

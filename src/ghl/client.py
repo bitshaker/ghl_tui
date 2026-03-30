@@ -2,13 +2,80 @@
 
 from __future__ import annotations
 
+import json
+import os
+import sys
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, ClassVar, Literal, Optional
 
 import httpx
 from pydantic import BaseModel
 
 from .config import config_manager
+
+
+def _http_debug_enabled() -> bool:
+    """True when GHL_DEBUG_HTTP or GHL_DEBUG is set (1, true, yes, on, stderr)."""
+    for key in ("GHL_DEBUG_HTTP", "GHL_DEBUG"):
+        v = (os.environ.get(key) or "").strip().lower()
+        if v in ("1", "true", "yes", "on", "stderr"):
+            return True
+    return False
+
+
+def _http_debug_use_stderr() -> bool:
+    """
+    Prefer logging to stderr only when explicitly requested.
+
+    Writing to stderr while Textual runs corrupts the full-screen TUI (alternate
+    buffer); default is a log file under ~/.ghl_tui/.
+    """
+    raw = (os.environ.get("GHL_DEBUG_HTTP") or "").strip().lower()
+    if raw == "stderr":
+        return True
+    return (os.environ.get("GHL_DEBUG_HTTP_TARGET") or "").strip().lower() == "stderr"
+
+
+def _http_debug_log_path() -> Path:
+    override = (os.environ.get("GHL_DEBUG_HTTP_LOG") or "").strip()
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".ghl_tui" / "http-debug.log"
+
+
+def _preview_for_debug(obj: Any, max_len: int = 6000) -> str:
+    """Compact JSON or repr for debug logging; truncated."""
+    try:
+        if isinstance(obj, (dict, list)):
+            s = json.dumps(obj, default=str, indent=2)
+        else:
+            s = repr(obj)
+    except Exception:
+        s = repr(obj)
+    if len(s) > max_len:
+        return s[: max_len - 3] + "..."
+    return s
+
+
+def _log_http_debug(message: str) -> None:
+    """Log HTTP trace when GHL_DEBUG_HTTP is set (file by default; stderr optional)."""
+    if not _http_debug_enabled():
+        return
+    line = f"[ghl-http] {message}"
+    if _http_debug_use_stderr():
+        print(line, file=sys.stderr, flush=True)
+        return
+    try:
+        path = _http_debug_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with path.open("a", encoding="utf-8") as f:
+            f.write(f"{ts} {line}\n")
+    except Exception:
+        # Never break API calls if logging fails
+        pass
 
 
 class RateLimitInfo(BaseModel):
@@ -148,7 +215,13 @@ class GHLClient:
             body: Optional[dict] = None
             try:
                 body = response.json()
-                message = (body or {}).get("message") or (body or {}).get("error") or str(body)
+                raw = (body or {}).get("message") or (body or {}).get("error")
+                if raw is None:
+                    message = str(body)
+                elif isinstance(raw, list):
+                    message = "; ".join(str(m) for m in raw)
+                else:
+                    message = str(raw)
             except Exception:
                 message = response.text or f"HTTP {response.status_code}"
             raise APIError(response.status_code, message, body)
@@ -206,6 +279,11 @@ class GHLClient:
                     # For file uploads, don't use JSON content type
                     headers = self._default_headers()
                     del headers["Content-Type"]
+                    if _http_debug_enabled():
+                        _log_http_debug(
+                            f"{method} {path} params={_preview_for_debug(params)} "
+                            f"json_body={_preview_for_debug(json)} [multipart/files]"
+                        )
                     response = self.client.request(
                         method,
                         path,
@@ -215,11 +293,30 @@ class GHLClient:
                         headers=headers,
                     )
                 else:
+                    if _http_debug_enabled():
+                        _log_http_debug(
+                            f"{method} {self.BASE_URL}{path} "
+                            f"params={_preview_for_debug(params)} "
+                            f"json_body={_preview_for_debug(json)} "
+                            f"Version={self.api_version!r} Authorization=Bearer ***"
+                        )
                     response = self.client.request(
                         method,
                         path,
                         params=params,
                         json=json,
+                    )
+
+                if _http_debug_enabled():
+                    body_preview: str
+                    try:
+                        body_preview = _preview_for_debug(response.json())
+                    except Exception:
+                        body_preview = _preview_for_debug(
+                            (response.text or "")[:8000]
+                        )
+                    _log_http_debug(
+                        f"<- {response.status_code} {path} body={body_preview}"
                     )
 
                 return self._handle_response(response)
