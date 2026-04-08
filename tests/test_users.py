@@ -4,6 +4,7 @@ import pytest
 from click.testing import CliRunner
 
 from ghl.cli import main
+from ghl.services import users as users_svc
 
 
 class TestUserCommands:
@@ -46,3 +47,21 @@ class TestUserCommands:
         mock_user_client.get.assert_called_once()
         call_args = mock_user_client.get.call_args
         assert call_args[0][0] == "/users/"
+
+
+class TestUserDisplayHelpers:
+    def test_user_display_label_prefers_name(self) -> None:
+        assert users_svc.user_display_label(
+            {"id": "u1", "name": "Jane Doe", "email": "j@x.com"}
+        ) == "Jane Doe"
+
+    def test_user_display_label_falls_back_to_email(self) -> None:
+        assert users_svc.user_display_label({"id": "u1", "email": "j@x.com"}) == "j@x.com"
+
+    def test_build_user_id_to_label_map(self) -> None:
+        users = [
+            {"id": "a", "name": "Alice"},
+            {"id": "b", "email": "bob@x.com"},
+        ]
+        m = users_svc.build_user_id_to_label_map(users)
+        assert m == {"a": "Alice", "b": "bob@x.com"}

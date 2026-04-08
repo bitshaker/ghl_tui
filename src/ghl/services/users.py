@@ -14,6 +14,23 @@ def list_users(client: "GHLClient") -> list[dict]:
     return response.get("users", [])
 
 
+def user_display_label(user: dict) -> str:
+    """Display name for a user row from list_users (matches contact assignee dropdown)."""
+    uid = user.get("id") or ""
+    label = user.get("name") or user.get("email") or uid or "—"
+    return str(label)[:50]
+
+
+def build_user_id_to_label_map(users: list[dict]) -> dict[str, str]:
+    """Map user id -> label for resolving assignedTo on contacts."""
+    m: dict[str, str] = {}
+    for u in users:
+        uid = (u.get("id") or "").strip()
+        if uid:
+            m[uid] = user_display_label(u)
+    return m
+
+
 def search_users(client: "GHLClient", query: str) -> list[dict]:
     """
     Search users by name or email.

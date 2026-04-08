@@ -68,6 +68,8 @@ class ContactDetail(Static):
         contact: dict,
         custom_field_defs: Optional[list[dict]] = None,
         custom_values: Optional[list[dict]] = None,
+        *,
+        assigned_to_display: Optional[str] = None,
     ) -> None:
         self._contact = contact
         self._contact_id = contact.get("id")
@@ -98,12 +100,22 @@ class ContactDetail(Static):
         email_part = email_val if email_val else "—"
         phone_part = phone_val if phone_val else "—"
         type_part = type_val if type_val else "—"
+        raw_assign = contact.get("assignedTo")
+        if isinstance(raw_assign, list) and raw_assign:
+            assign_id = str(raw_assign[0] or "").strip()
+        else:
+            assign_id = str(raw_assign or "").strip()
+        if assign_id:
+            assign_part = (assigned_to_display or assign_id)[:50]
+        else:
+            assign_part = "—"
 
         lines = [
             f"[bold]{_contact_label(contact)}[/bold]  ({contact.get('id', '')})",
             f"email: {email_part}",
             f"phone: {phone_part}",
             f"type: {type_part}",
+            f"assigned to: {assign_part}",
         ]
         company = (contact.get("companyName") or "").strip()
         if company:
@@ -408,8 +420,30 @@ class ContactsView(Container):
                 )
             except Exception:
                 pass
+            assigned_to_display: Optional[str] = None
+            raw_assign = contact.get("assignedTo") if isinstance(contact, dict) else None
+            if isinstance(raw_assign, list) and raw_assign:
+                assign_id = str(raw_assign[0] or "").strip()
+            else:
+                assign_id = str(raw_assign or "").strip()
+            if assign_id:
+                try:
+                    user_map = users_svc.build_user_id_to_label_map(
+                        users_svc.list_users(client)
+                    )
+                    assigned_to_display = user_map.get(assign_id) or assign_id[:20]
+                except Exception:
+                    assigned_to_display = assign_id[:20]
             rli = client.rate_limit_info
-            return (contact, notes, tasks, custom_field_defs, custom_values, rli)
+            return (
+                contact,
+                notes,
+                tasks,
+                custom_field_defs,
+                custom_values,
+                assigned_to_display,
+                rli,
+            )
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         if event.state == WorkerState.ERROR and getattr(event.worker, "error", None):
@@ -418,9 +452,17 @@ class ContactsView(Container):
         if event.state != WorkerState.SUCCESS or not event.worker.result:
             return
         result = event.worker.result
-        # Contact detail worker returns 6-tuple: (contact, notes, tasks, custom_field_defs, custom_values, rli)
-        if isinstance(result, tuple) and len(result) == 6:
-            contact, notes, tasks, custom_field_defs, custom_values, rli = result
+        # Contact detail worker returns 7-tuple: (contact, notes, tasks, defs, values, assigned_label, rli)
+        if isinstance(result, tuple) and len(result) == 7:
+            (
+                contact,
+                notes,
+                tasks,
+                custom_field_defs,
+                custom_values,
+                assigned_to_display,
+                rli,
+            ) = result
             try:
                 header = self.screen.query_one("#header_bar", HeaderBar)
                 header.update_rate_limit(rli)
@@ -431,6 +473,7 @@ class ContactsView(Container):
                     contact,
                     custom_field_defs=custom_field_defs,
                     custom_values=custom_values,
+                    assigned_to_display=assigned_to_display,
                 )
                 self.query_one("#contact-tasks-preview", ContactTasksPreview).show_tasks(tasks)
                 self.query_one("#contact-notes-preview", ContactNotesPreview).show_notes(notes)
