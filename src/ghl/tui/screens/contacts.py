@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+import httpx
 from textual import work
 from textual.binding import Binding
 from textual.containers import Container, Vertical
@@ -28,6 +29,7 @@ from ..contact_opportunities import ContactOpportunitiesModal
 from ..contact_tag import AddTagModal, RemoveTagModal
 from ..contact_tasks import ContactTasksModal, task_display_text
 from ..text_utils import html_to_plain
+from ..transport_errors import notify_transport_error, transport_error_toast_message
 from ..widgets.rate_limit import HeaderBar
 
 
@@ -370,84 +372,99 @@ class ContactsView(Container):
     ) -> tuple:
         location_id = get_location_id()
         page = self._current_page if page_override is None else page_override
-        with GHLClient(get_token(), location_id) as client:
-            query = query_override
-            if query is None:
-                try:
-                    inp = self.query_one("#contacts-search", Input)
-                    query = (inp.value or "").strip() or None
-                except Exception:
-                    pass
-            if query is None and self._current_filter:
-                query = self._current_filter.get("query")
-            tags = self._current_filter.get("tags") or []
-            assigned_to = self._current_filter.get("assignedTo")
-            custom_field_filters = self._current_filter.get("customFieldFilters") or []
-            has_filters = bool(tags or assigned_to or custom_field_filters)
-            contacts, total = contact_svc.contacts_search(
-                client,
-                location_id,
-                page=page,
-                page_limit=self._page_limit,
-                query=query,
-                tags=tags if tags else None,
-                assigned_to=assigned_to,
-                custom_field_filters=custom_field_filters if custom_field_filters else None,
-            )
-            # If no search/filter and Search API returned empty, fall back to list so user sees contacts
-            if not (has_filters or query) and not contacts:
-                contacts = contact_svc.list_contacts(
-                    client, limit=self._page_limit, query=None
+        try:
+            with GHLClient(get_token(), location_id) as client:
+                query = query_override
+                if query is None:
+                    try:
+                        inp = self.query_one("#contacts-search", Input)
+                        query = (inp.value or "").strip() or None
+                    except Exception:
+                        pass
+                if query is None and self._current_filter:
+                    query = self._current_filter.get("query")
+                tags = self._current_filter.get("tags") or []
+                assigned_to = self._current_filter.get("assignedTo")
+                custom_field_filters = self._current_filter.get("customFieldFilters") or []
+                has_filters = bool(tags or assigned_to or custom_field_filters)
+                contacts, total = contact_svc.contacts_search(
+                    client,
+                    location_id,
+                    page=page,
+                    page_limit=self._page_limit,
+                    query=query,
+                    tags=tags if tags else None,
+                    assigned_to=assigned_to,
+                    custom_field_filters=custom_field_filters if custom_field_filters else None,
                 )
-                total = len(contacts)
-                page = 1
-            rli = client.rate_limit_info
-            return (contacts, total, page, rli)
+                # If no search/filter and Search API returned empty, fall back to list so user sees contacts
+                if not (has_filters or query) and not contacts:
+                    contacts = contact_svc.list_contacts(
+                        client, limit=self._page_limit, query=None
+                    )
+                    total = len(contacts)
+                    page = 1
+                rli = client.rate_limit_info
+                return (contacts, total, page, rli)
+        except httpx.TransportError as e:
+            notify_transport_error(self, e)
+            return ([], 0, page, None)
 
     @work(thread=True)
     def load_contact_detail(self, contact_id: str) -> tuple:
         location_id = get_location_id()
-        with GHLClient(get_token(), location_id) as client:
-            contact = contact_svc.get_contact(client, contact_id)
-            notes = contact_svc.list_notes(client, contact_id)
-            tasks = contact_svc.list_tasks(client, contact_id)
-            custom_field_defs: list[dict] = []
-            custom_values: list[dict] = []
-            try:
-                custom_field_defs = custom_fields_svc.list_custom_fields(client, location_id)
-                custom_values = custom_fields_svc.list_custom_values(
-                    client, location_id, contact_id
-                )
-            except Exception:
-                pass
-            assigned_to_display: Optional[str] = None
-            raw_assign = contact.get("assignedTo") if isinstance(contact, dict) else None
-            if isinstance(raw_assign, list) and raw_assign:
-                assign_id = str(raw_assign[0] or "").strip()
-            else:
-                assign_id = str(raw_assign or "").strip()
-            if assign_id:
+        try:
+            with GHLClient(get_token(), location_id) as client:
+                contact = contact_svc.get_contact(client, contact_id)
+                notes = contact_svc.list_notes(client, contact_id)
+                tasks = contact_svc.list_tasks(client, contact_id)
+                custom_field_defs: list[dict] = []
+                custom_values: list[dict] = []
                 try:
-                    user_map = users_svc.build_user_id_to_label_map(
-                        users_svc.list_users(client)
+                    custom_field_defs = custom_fields_svc.list_custom_fields(
+                        client, location_id
                     )
-                    assigned_to_display = user_map.get(assign_id) or assign_id[:20]
+                    custom_values = custom_fields_svc.list_custom_values(
+                        client, location_id, contact_id
+                    )
                 except Exception:
-                    assigned_to_display = assign_id[:20]
-            rli = client.rate_limit_info
-            return (
-                contact,
-                notes,
-                tasks,
-                custom_field_defs,
-                custom_values,
-                assigned_to_display,
-                rli,
-            )
+                    pass
+                assigned_to_display: Optional[str] = None
+                raw_assign = (
+                    contact.get("assignedTo") if isinstance(contact, dict) else None
+                )
+                if isinstance(raw_assign, list) and raw_assign:
+                    assign_id = str(raw_assign[0] or "").strip()
+                else:
+                    assign_id = str(raw_assign or "").strip()
+                if assign_id:
+                    try:
+                        user_map = users_svc.build_user_id_to_label_map(
+                            users_svc.list_users(client)
+                        )
+                        assigned_to_display = user_map.get(assign_id) or assign_id[:20]
+                    except Exception:
+                        assigned_to_display = assign_id[:20]
+                rli = client.rate_limit_info
+                return (
+                    contact,
+                    notes,
+                    tasks,
+                    custom_field_defs,
+                    custom_values,
+                    assigned_to_display,
+                    rli,
+                )
+        except httpx.TransportError as e:
+            notify_transport_error(self, e)
+            return (None, [], [], [], [], None, None)
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
-        if event.state == WorkerState.ERROR and getattr(event.worker, "error", None):
-            self.notify(f"Error: {event.worker.error}", severity="error")
+        if event.state == WorkerState.ERROR:
+            err = getattr(event.worker, "error", None)
+            if err is not None:
+                friendly = transport_error_toast_message(err)
+                self.notify(friendly or f"Error: {err}", severity="error")
             return
         if event.state != WorkerState.SUCCESS or not event.worker.result:
             return
@@ -468,6 +485,18 @@ class ContactsView(Container):
                 header.update_rate_limit(rli)
             except Exception:
                 pass
+            if contact is None:
+                try:
+                    self.query_one("#contact-detail", ContactDetail).clear_contact()
+                    self.query_one(
+                        "#contact-tasks-preview", ContactTasksPreview
+                    ).clear_tasks()
+                    self.query_one(
+                        "#contact-notes-preview", ContactNotesPreview
+                    ).clear_notes()
+                except Exception:
+                    pass
+                return
             if isinstance(contact, dict) and contact.get("id"):
                 self.query_one("#contact-detail", ContactDetail).show_contact(
                     contact,

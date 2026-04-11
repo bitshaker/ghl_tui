@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from rich.text import Text
 from textual import on, work
 from textual.containers import Container, Horizontal, Vertical
@@ -20,6 +21,7 @@ from ..calendar_appointments import (
     DeleteAppointmentModal,
     EditAppointmentModal,
 )
+from ..transport_errors import notify_transport_error, transport_error_toast_message
 from ..widgets.rate_limit import HeaderBar
 
 
@@ -201,6 +203,9 @@ class CalendarView(Container):
             except Exception:
                 pass
             return ([], {}, self._calendars_list or [], None)
+        except httpx.TransportError as e:
+            notify_transport_error(self, e)
+            return ([], {}, self._calendars_list or [], None)
 
     def _refresh_table(self) -> None:
         table = self.query_one("#calendar-table", DataTable)
@@ -326,9 +331,13 @@ class CalendarView(Container):
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         # Do not filter by worker.name: Textual may vary naming; this widget only
         # owns load_events workers. Match on the result tuple shape instead.
-        if event.state == WorkerState.ERROR and getattr(event.worker, "error", None):
-            err = event.worker.error
-            self.notify(f"Calendar load failed: {err}", severity="error")
+        if event.state == WorkerState.ERROR:
+            err = getattr(event.worker, "error", None)
+            if err is not None:
+                friendly = transport_error_toast_message(err)
+                self.notify(
+                    friendly or f"Calendar load failed: {err}", severity="error"
+                )
             return
         if event.state != WorkerState.SUCCESS:
             return

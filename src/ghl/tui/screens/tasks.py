@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from textual import on, work
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Button, DataTable, Label, Select, Static
@@ -16,6 +17,7 @@ from ...services import contacts as contact_svc
 from ...services import tasks as tasks_svc
 from ...services import users as users_svc
 from ..contact_tasks import ContactTasksModal, format_task_date
+from ..transport_errors import notify_transport_error, transport_error_toast_message
 
 
 def _task_due_date_parsed(due_date: str | None) -> Optional[datetime]:
@@ -171,41 +173,45 @@ class TasksView(Container):
         location_id = get_location_id()
         page = self._current_page if page_override is None else page_override
         skip = (page - 1) * self._page_limit
-        with GHLClient(get_token(), location_id) as client:
-            users = users_svc.list_users(client)
-            user_map = {}
-            for u in users:
-                uid = u.get("id") or ""
-                if uid:
-                    user_map[uid] = u.get("name") or u.get("email") or uid
-            raw_tasks, total = tasks_svc.search_tasks(
-                client,
-                location_id,
-                assignee_id=self._assignee_id,
-                status=self._status,
-                limit=self._page_limit,
-                skip=skip,
-            )
-            tasks_filtered = _apply_date_filter(raw_tasks, self._saved_filter)
-            contact_map = {}
-            for t in tasks_filtered:
-                if t.get("contactName"):
-                    continue
-                cid = t.get("contactId")
-                if cid and cid not in contact_map:
-                    try:
-                        contact = contact_svc.get_contact(client, cid)
-                        name = (
-                            (contact.get("firstName") or "")
-                            + " "
-                            + (contact.get("lastName") or "")
-                        ).strip()
-                        name = name or contact.get("name") or contact.get("email") or cid
-                        contact_map[cid] = name[:50]
-                    except Exception:
-                        contact_map[cid] = cid[:20]
-            rli = client.rate_limit_info
-            return (tasks_filtered, user_map, contact_map, total, page, rli)
+        try:
+            with GHLClient(get_token(), location_id) as client:
+                users = users_svc.list_users(client)
+                user_map = {}
+                for u in users:
+                    uid = u.get("id") or ""
+                    if uid:
+                        user_map[uid] = u.get("name") or u.get("email") or uid
+                raw_tasks, total = tasks_svc.search_tasks(
+                    client,
+                    location_id,
+                    assignee_id=self._assignee_id,
+                    status=self._status,
+                    limit=self._page_limit,
+                    skip=skip,
+                )
+                tasks_filtered = _apply_date_filter(raw_tasks, self._saved_filter)
+                contact_map = {}
+                for t in tasks_filtered:
+                    if t.get("contactName"):
+                        continue
+                    cid = t.get("contactId")
+                    if cid and cid not in contact_map:
+                        try:
+                            contact = contact_svc.get_contact(client, cid)
+                            name = (
+                                (contact.get("firstName") or "")
+                                + " "
+                                + (contact.get("lastName") or "")
+                            ).strip()
+                            name = name or contact.get("name") or contact.get("email") or cid
+                            contact_map[cid] = name[:50]
+                        except Exception:
+                            contact_map[cid] = cid[:20]
+                rli = client.rate_limit_info
+                return (tasks_filtered, user_map, contact_map, total, page, rli)
+        except httpx.TransportError as e:
+            notify_transport_error(self, e)
+            return ([], {}, {}, None, page, None)
 
     def _refresh_table(self) -> None:
         table = self.query_one("#tasks-table", DataTable)
@@ -271,9 +277,13 @@ class TasksView(Container):
         self, contact_id: str, task_id: str, completed: bool
     ) -> str:
         """Worker: update task completed state. Returns 'toggle_done' on success."""
-        with GHLClient(get_token(), get_location_id()) as client:
-            contact_svc.update_task_completed(client, contact_id, task_id, completed)
-        return "toggle_done"
+        try:
+            with GHLClient(get_token(), get_location_id()) as client:
+                contact_svc.update_task_completed(client, contact_id, task_id, completed)
+            return "toggle_done"
+        except httpx.TransportError as e:
+            notify_transport_error(self, e)
+            return "toggle_aborted"
 
     def action_toggle_complete(self) -> None:
         task = self._get_selected_task()
@@ -334,6 +344,12 @@ class TasksView(Container):
         self.load_tasks(page_override=self._current_page - 1)
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        if event.state == WorkerState.ERROR:
+            err = getattr(event.worker, "error", None)
+            if err is not None:
+                friendly = transport_error_toast_message(err)
+                self.notify(friendly or f"Error: {err}", severity="error")
+            return
         if event.state != WorkerState.SUCCESS or not event.worker.result:
             return
         result = event.worker.result
@@ -341,6 +357,8 @@ class TasksView(Container):
         if result == "toggle_done":
             self.notify("Task updated")
             self.load_tasks()
+            return
+        if result == "toggle_aborted":
             return
         if not isinstance(result, tuple) or len(result) != 6:
             return

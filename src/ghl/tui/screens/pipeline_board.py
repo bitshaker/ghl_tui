@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+import httpx
 from textual import on, work
 from textual.binding import Binding
 from textual.containers import Container, ScrollableContainer, Vertical
@@ -22,6 +23,7 @@ from ...services import opportunities as opp_svc
 from ...services import pipelines as pipeline_svc
 from ..opportunity_detail import OpportunityDetailModal
 from ..opportunity_move import MoveStageModal
+from ..transport_errors import notify_transport_error, transport_error_toast_message
 
 
 class OpportunityListView(ListView):
@@ -143,10 +145,14 @@ class PipelineBoardView(Container):
 
     @work(thread=True)
     def load_pipelines(self) -> tuple[list[dict], object]:
-        with GHLClient(get_token(), get_location_id()) as client:
-            pipelines = pipeline_svc.list_pipelines(client)
-            rli = client.rate_limit_info
-            return (pipelines, rli)
+        try:
+            with GHLClient(get_token(), get_location_id()) as client:
+                pipelines = pipeline_svc.list_pipelines(client)
+                rli = client.rate_limit_info
+                return (pipelines, rli)
+        except httpx.TransportError as e:
+            notify_transport_error(self, e)
+            return ([], None)
 
     @work(thread=True)
     def load_board(self) -> tuple[dict, object]:
@@ -157,14 +163,24 @@ class PipelineBoardView(Container):
         pipeline = next((p for p in self._pipelines if p.get("id") == pipeline_id), None)
         if not pipeline:
             return ({}, None)
-        with GHLClient(get_token(), get_location_id()) as client:
-            opps = opp_svc.list_opportunities(
-                client, pipeline_id=pipeline_id, limit=100, status="open"
-            )
-            rli = client.rate_limit_info
-            return ({"pipeline": pipeline, "opportunities": opps}, rli)
+        try:
+            with GHLClient(get_token(), get_location_id()) as client:
+                opps = opp_svc.list_opportunities(
+                    client, pipeline_id=pipeline_id, limit=100, status="open"
+                )
+                rli = client.rate_limit_info
+                return ({"pipeline": pipeline, "opportunities": opps}, rli)
+        except httpx.TransportError as e:
+            notify_transport_error(self, e)
+            return ({}, None)
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        if event.state == WorkerState.ERROR:
+            err = getattr(event.worker, "error", None)
+            if err is not None:
+                friendly = transport_error_toast_message(err)
+                self.notify(friendly or f"Pipeline load failed: {err}", severity="error")
+            return
         if event.state != WorkerState.SUCCESS or not event.worker.result:
             return
         result = event.worker.result
