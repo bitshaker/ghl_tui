@@ -117,7 +117,8 @@ When creating your Private Integration, select these scopes based on the feature
 | Calendars | `calendars.readonly`, `calendars.write` |
 | Opportunities | `opportunities.readonly`, `opportunities.write` |
 | Conversations | `conversations.readonly`, `conversations.write` |
-| Workflows | `workflows.readonly` |
+| Workflows (list) | `workflows.readonly` |
+| Workflows (enroll / remove contact) | `contacts.write` |
 | Locations | `locations.readonly` |
 | Tasks (location-level search, TUI Tasks tab) | `locations/tasks.readonly` |
 | Tasks (toggle complete in TUI) | `locations/tasks.write` (if supported) |
@@ -163,6 +164,8 @@ ghl contacts create --email "a@b.com"             # Create contact
 ghl contacts update CONTACT_ID --phone "+1234"    # Update contact
 ghl contacts delete CONTACT_ID                    # Delete contact
 ghl contacts search "query"                       # Search contacts
+ghl contacts workflow add CID WORKFLOW_ID         # Enroll contact in workflow
+ghl contacts workflow remove CID WORKFLOW_ID      # Remove contact from workflow
 ghl contacts tag CONTACT_ID --tag "VIP"           # Add tag to contact
 ghl contacts untag CONTACT_ID --tag "VIP"         # Remove tag from contact
 ghl contacts notes CONTACT_ID                     # List contact notes
@@ -252,10 +255,14 @@ ghl conversations send \
 ### Workflows
 
 ```bash
-ghl workflows list                        # List workflows
-ghl workflows get WORKFLOW_ID             # Get workflow details
-ghl workflows trigger ID --contact CID    # Trigger workflow for contact
+ghl workflows list                                    # List workflows
+ghl workflows get WORKFLOW_ID                         # Lookup workflow (from list API)
+ghl workflows trigger WORKFLOW_ID --contact CID       # Enroll contact in workflow
+ghl contacts workflow add CONTACT_ID WORKFLOW_ID      # Same enroll via contacts command
+ghl contacts workflow remove CONTACT_ID WORKFLOW_ID   # Remove contact from workflow
 ```
+
+There is no GHL API to **list** which workflows a contact is in (or which contacts are in a workflow). Use `workflows list` for workflow metadata; track enrollment yourself or via workflow webhooks if you need membership state.
 
 ### Pipelines
 

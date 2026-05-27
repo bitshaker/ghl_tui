@@ -11,6 +11,7 @@ from ..options import output_format_options
 from ..output import output_data, print_success
 from ..saved_searches import list_saved_searches
 from ..services import contacts as contact_svc
+from ..services import workflows as workflow_svc
 
 # Column definitions for contact list
 CONTACT_COLUMNS = [
@@ -353,6 +354,59 @@ def list_notes(ctx, contact_id: str):
             format=output_format,
             title=f"Notes for Contact {contact_id}",
         )
+
+
+@contacts.group("workflow")
+def contact_workflow():
+    """
+    Add or remove a contact from a workflow.
+
+    The GHL API does not expose a way to list which workflows a contact is in.
+    """
+    pass
+
+
+@contact_workflow.command("add")
+@click.argument("contact_id")
+@click.argument("workflow_id")
+@click.option(
+    "--event-start-time",
+    help="Optional ISO-8601 start time for wait/timer steps (eventStartTime)",
+)
+def workflow_add(contact_id: str, workflow_id: str, event_start_time: Optional[str]):
+    """Enroll a contact in a workflow."""
+    token = get_token()
+    location_id = get_location_id()
+
+    with GHLClient(token, location_id) as client:
+        response = workflow_svc.add_contact_to_workflow(
+            client,
+            contact_id,
+            workflow_id,
+            event_start_time=event_start_time,
+        )
+        if workflow_svc.enrollment_succeeded(response):
+            print_success(f"Contact {contact_id} added to workflow {workflow_id}")
+        else:
+            print_success(f"Workflow add sent for contact {contact_id}")
+
+
+@contact_workflow.command("remove")
+@click.argument("contact_id")
+@click.argument("workflow_id")
+def workflow_remove(contact_id: str, workflow_id: str):
+    """Remove a contact from a workflow."""
+    token = get_token()
+    location_id = get_location_id()
+
+    with GHLClient(token, location_id) as client:
+        response = workflow_svc.remove_contact_from_workflow(
+            client, contact_id, workflow_id
+        )
+        if workflow_svc.enrollment_succeeded(response):
+            print_success(f"Contact {contact_id} removed from workflow {workflow_id}")
+        else:
+            print_success(f"Workflow remove sent for contact {contact_id}")
 
 
 @contacts.command("add-note")
