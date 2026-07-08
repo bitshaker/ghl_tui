@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, ListItem, ListView, Static, TextArea
@@ -66,22 +67,66 @@ def task_display_text(task: dict) -> str:
 class ContactTasksModal(ModalScreen[None]):
     """Modal showing tasks for a contact with add/complete/delete."""
 
-    CSS = """
-    #task-input {
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close", priority=True),
+    ]
+
+    DEFAULT_CSS = """
+    ContactTasksModal {
+        align: center middle;
+    }
+    #tasks-form {
+        width: 88;
+        min-width: 56;
+        max-width: 95%;
+        height: auto;
+        max-height: 90%;
+        padding: 1 1;
+        border: solid $primary;
+        background: $surface;
+    }
+    #tasks-title {
+        height: 1;
+        margin-bottom: 1;
+    }
+    #contact-tasks-list {
+        height: 14;
+        max-height: 18;
+        margin-bottom: 1;
+        border: tall $primary;
+    }
+    #task-actions {
+        height: auto;
+        min-height: 2;
+        margin-bottom: 1;
+    }
+    #task-add-label {
+        height: 1;
+        margin-bottom: 0;
+    }
+    #task-input,
+    #task-due {
+        height: 3;
         width: 100%;
+        margin-bottom: 0;
     }
     #task-body {
         height: 4;
         width: 100%;
+        margin-bottom: 1;
     }
-    #task-due {
-        width: 100%;
-    }
-    #task-actions {
+    #task-buttons {
         height: auto;
-        padding: 0 0 1 0;
+        margin-top: 0;
+        margin-bottom: 1;
     }
     #task-buttons Button {
+        margin-right: 2;
+    }
+    #tasks-close-actions {
+        height: auto;
+    }
+    #tasks-close-actions Button {
         margin-right: 2;
     }
     """
@@ -101,24 +146,25 @@ class ContactTasksModal(ModalScreen[None]):
         self._selected_index: int = -1
 
     def compose(self):
-        with Vertical():
+        with Vertical(id="tasks-form"):
             if self._contact_name:
                 yield Label(f"Tasks — {self._contact_name}", id="tasks-title")
             else:
                 yield Label("Tasks", id="tasks-title")
             yield ListView(id="contact-tasks-list")
-            yield Static("Add a new task:", id="task-add-label")
+            yield Static("Select a task to complete or delete", id="task-actions")
+            yield Label("Add a new task:", id="task-add-label")
             yield Input(placeholder="Title (required)…", id="task-input")
             yield TextArea(placeholder="Body (optional)…", id="task-body")
             yield Input(
                 placeholder="Due date (optional, YYYY-MM-DD or YYYY-MM-DDTHH:MM)…",
                 id="task-due",
             )
-            yield Static("", id="task-actions")
             with Horizontal(id="task-buttons"):
-                yield Button("Add task", id="task-add")
-                yield Button("Toggle complete", id="task-complete")
-                yield Button("Delete task", id="task-delete")
+                yield Button("Add task", variant="primary", id="task-add")
+                yield Button("Toggle complete", id="task-complete", disabled=True)
+                yield Button("Delete task", id="task-delete", disabled=True)
+            with Horizontal(id="tasks-close-actions"):
                 yield Button("Close", id="tasks-close")
 
     def on_mount(self) -> None:
@@ -159,6 +205,7 @@ class ContactTasksModal(ModalScreen[None]):
                 lines.append(f"Body: {body[:200]}{'…' if len(body) > 200 else ''}")
             actions.update("\n".join(lines))
         else:
+            complete_btn.label = "Toggle complete"
             complete_btn.disabled = True
             delete_btn.disabled = True
             actions.update("Select a task to complete or delete")
