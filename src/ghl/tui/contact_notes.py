@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, RichLog, TextArea
@@ -28,14 +29,51 @@ def format_note_date(date_added: str) -> str:
         return date_added[:19] if len(date_added) >= 19 else date_added
 
 
+def _notes_chronological(notes: list[dict]) -> list[dict]:
+    """Return notes oldest-first (API often returns newest-first)."""
+    return sorted(notes, key=lambda n: (n.get("dateAdded") or "").strip())
+
+
 class ContactNotesModal(ModalScreen[None]):
     """Modal showing notes for a contact and allowing add."""
 
-    CSS = """
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close", priority=True),
+    ]
+
+    DEFAULT_CSS = """
+    ContactNotesModal {
+        align: center middle;
+    }
+    #notes-form {
+        width: 88;
+        min-width: 56;
+        max-width: 95%;
+        height: auto;
+        max-height: 90%;
+        padding: 1 1;
+        border: solid $primary;
+        background: $surface;
+    }
+    #notes-title {
+        height: 1;
+        margin-bottom: 1;
+    }
+    #notes-log {
+        height: 22;
+        max-height: 26;
+        margin-bottom: 1;
+        border: tall $primary;
+    }
     #note-input {
         height: 6;
+        margin-bottom: 0;
     }
-    #notes-buttons Button {
+    #notes-actions {
+        height: auto;
+        margin-top: 1;
+    }
+    #notes-actions Button {
         margin-right: 2;
     }
     """
@@ -46,15 +84,15 @@ class ContactNotesModal(ModalScreen[None]):
         self._contact_name = (contact_name or "").strip() or None
 
     def compose(self):
-        with Vertical():
+        with Vertical(id="notes-form"):
             if self._contact_name:
                 yield Label(f"Notes — {self._contact_name}", id="notes-title")
             else:
                 yield Label("Notes", id="notes-title")
-            yield RichLog(id="notes-log", highlight=True, markup=True)
-            yield TextArea(id="note-input")
-            with Horizontal(id="notes-buttons"):
-                yield Button("Add note", id="note-add")
+            yield RichLog(id="notes-log", highlight=True, markup=True, wrap=True)
+            yield TextArea(id="note-input", placeholder="Add a note…")
+            with Horizontal(id="notes-actions"):
+                yield Button("Add note", variant="primary", id="note-add")
                 yield Button("Close", id="notes-close")
 
     def on_mount(self) -> None:
@@ -65,6 +103,7 @@ class ContactNotesModal(ModalScreen[None]):
             notes = contact_svc.list_notes(client, self._contact_id)
         log = self.query_one("#notes-log", RichLog)
         log.clear()
+        notes = _notes_chronological(notes)
         for i, n in enumerate(notes):
             body = html_to_plain(n.get("body") or "")
             date_str = format_note_date(n.get("dateAdded") or "")

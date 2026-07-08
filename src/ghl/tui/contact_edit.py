@@ -33,7 +33,9 @@ class ContactEditModal(ModalScreen[dict]):
         max-width: 95%;
         height: auto;
         max-height: 90%;
-        padding: 0 1;
+        padding: 1 1;
+        border: solid $primary;
+        background: $surface;
     }
     #contact-edit-fields {
         height: auto;
