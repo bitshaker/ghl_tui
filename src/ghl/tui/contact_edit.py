@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Iterator, Optional
 
-from textual.containers import Vertical
+from textual.binding import Binding
+from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import ModalScreen
+from textual.widget import Widget
 from textual.widgets import Button, Input, Label, Select
 
 from ..auth import get_location_id, get_token
@@ -16,6 +18,57 @@ from ..services import custom_fields as custom_fields_svc
 
 class ContactEditModal(ModalScreen[dict]):
     """Modal to create or edit a contact."""
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Cancel", priority=True),
+    ]
+
+    DEFAULT_CSS = """
+    ContactEditModal {
+        align: center middle;
+    }
+    #contact-edit-form {
+        width: 88;
+        min-width: 56;
+        max-width: 95%;
+        height: auto;
+        max-height: 90%;
+        padding: 0 1;
+    }
+    #contact-edit-fields {
+        height: auto;
+        max-height: 32;
+        margin-bottom: 0;
+    }
+    .field-row {
+        height: auto;
+        max-height: 4;
+        margin-bottom: 0;
+    }
+    .field-cell {
+        width: 1fr;
+        height: auto;
+        min-width: 0;
+        margin-right: 1;
+    }
+    .field-cell Label {
+        height: 1;
+        margin-bottom: 0;
+    }
+    .field-cell Input,
+    .field-cell Select {
+        width: 100%;
+        min-width: 28;
+        height: 3;
+    }
+    #contact-edit-actions {
+        height: auto;
+        margin-top: 1;
+    }
+    #contact-edit-actions Button {
+        margin-right: 2;
+    }
+    """
 
     def __init__(
         self,
@@ -42,105 +95,150 @@ class ContactEditModal(ModalScreen[dict]):
     def _safe_id(self, fid: str) -> str:
         return "custom-" + "".join(c if c.isalnum() or c in "-_" else "_" for c in fid)
 
-    def compose(self):
-        with Vertical():
-            yield Label("First name")
-            yield Input(
-                value=(self._contact or {}).get("firstName", ""),
-                placeholder="First",
-                id="contact-first",
-            )
-            yield Label("Last name")
-            yield Input(
-                value=(self._contact or {}).get("lastName", ""),
-                placeholder="Last",
-                id="contact-last",
-            )
-            yield Label("Email" if self._is_edit else "Email *")
-            yield Input(
-                value=(self._contact or {}).get("email", ""),
-                placeholder="email@example.com",
-                id="contact-email",
-            )
-            yield Label("Phone")
-            yield Input(
-                value=(self._contact or {}).get("phone", ""),
-                placeholder="+1…",
-                id="contact-phone",
-            )
-            cur_ctype = (self._contact or {}).get("type") or ""
-            if isinstance(cur_ctype, str):
-                cur_ctype = cur_ctype.strip()
+    def _field_cell(self, label: str, widget: Widget) -> Iterator[Widget]:
+        with Vertical(classes="field-cell"):
+            yield Label(label)
+            yield widget
+
+    def _field_row(
+        self,
+        left_label: str,
+        left_widget: Widget,
+        right_label: str | None = None,
+        right_widget: Widget | None = None,
+    ) -> Iterator[Widget]:
+        with Horizontal(classes="field-row"):
+            yield from self._field_cell(left_label, left_widget)
+            if right_label is not None and right_widget is not None:
+                yield from self._field_cell(right_label, right_widget)
             else:
-                cur_ctype = str(cur_ctype).strip() if cur_ctype is not None else ""
-            ctype_opts: list[tuple[str, str]] = [("— (none)", "")]
-            ctype_opts.extend(self._contact_type_options)
-            if cur_ctype and not any(v == cur_ctype for (_, v) in ctype_opts):
-                ctype_opts.append((cur_ctype, cur_ctype))
-            yield Label("Contact type")
-            yield Select(
-                ctype_opts,
-                value=cur_ctype or "",
-                allow_blank=True,
-                id="contact-type",
-            )
-            yield Label("Company")
-            yield Input(
-                value=(self._contact or {}).get("companyName", ""),
-                placeholder="Company",
-                id="contact-company",
-            )
-            yield Label("Source")
-            yield Input(
-                value=(self._contact or {}).get("source", ""),
-                placeholder="Lead source",
-                id="contact-source",
-            )
-            # Assigned to (location users)
-            assigned_opts: list[tuple[str, str]] = [("— (unassigned)", "")]
-            for u in self._users:
-                uid = u.get("id") or ""
-                label = u.get("name") or u.get("email") or uid or "—"
-                assigned_opts.append((label[:50], uid))
-            current_assigned = (self._contact or {}).get("assignedTo") or ""
-            if current_assigned and not any(v == current_assigned for (_, v) in assigned_opts):
-                assigned_opts.append((current_assigned, current_assigned))
-            yield Label("Assigned to")
-            yield Select(
-                assigned_opts,
-                value=current_assigned or "",
-                allow_blank=True,
-                id="contact-assigned",
-            )
-            self._custom_field_ids = []
-            self._dropdown_field_ids = set()
-            for field in self._custom_field_defs:
-                fk = (field.get("fieldKey") or field.get("key") or "").strip().lower()
-                if fk == "contact.type":
-                    continue
-                fid = str(field.get("id") or field.get("customFieldId", ""))
-                if not fid:
-                    continue
-                self._custom_field_ids.append(fid)
-                name = field.get("name") or field.get("label", fid)
-                value = self._custom_values_map.get(fid, "")
-                opts = custom_fields_svc.get_field_options(field)
-                is_dropdown = custom_fields_svc.field_has_options(field)
-                if is_dropdown:
-                    self._dropdown_field_ids.add(fid)
-                    options: list[tuple[str, str]] = [("— (empty)", "")]
-                    options.extend(opts)
-                    # Ensure current value is in options (in case it was removed or format differs)
-                    if value and not any(v == value for (_, v) in options):
-                        options.append((value, value))
-                    yield Label(name)
-                    yield Select(
-                        options, value=value or "", allow_blank=True, id=self._safe_id(fid)
-                    )
+                yield Vertical(classes="field-cell")
+
+    def compose(self):
+        with Vertical(id="contact-edit-form"):
+            with ScrollableContainer(id="contact-edit-fields"):
+                yield from self._field_row(
+                    "First name",
+                    Input(
+                        value=(self._contact or {}).get("firstName", ""),
+                        placeholder="First",
+                        id="contact-first",
+                    ),
+                    "Last name",
+                    Input(
+                        value=(self._contact or {}).get("lastName", ""),
+                        placeholder="Last",
+                        id="contact-last",
+                    ),
+                )
+                yield from self._field_row(
+                    "Email" if self._is_edit else "Email *",
+                    Input(
+                        value=(self._contact or {}).get("email", ""),
+                        placeholder="email@example.com",
+                        id="contact-email",
+                    ),
+                    "Phone",
+                    Input(
+                        value=(self._contact or {}).get("phone", ""),
+                        placeholder="+1…",
+                        id="contact-phone",
+                    ),
+                )
+                cur_ctype = (self._contact or {}).get("type") or ""
+                if isinstance(cur_ctype, str):
+                    cur_ctype = cur_ctype.strip()
                 else:
-                    yield Label(name)
-                    yield Input(value=value, placeholder=name, id=self._safe_id(fid))
-            with Vertical():
+                    cur_ctype = str(cur_ctype).strip() if cur_ctype is not None else ""
+                ctype_opts: list[tuple[str, str]] = [("— (none)", "")]
+                ctype_opts.extend(self._contact_type_options)
+                if cur_ctype and not any(v == cur_ctype for (_, v) in ctype_opts):
+                    ctype_opts.append((cur_ctype, cur_ctype))
+                assigned_opts: list[tuple[str, str]] = [("— (unassigned)", "")]
+                for u in self._users:
+                    uid = u.get("id") or ""
+                    label = u.get("name") or u.get("email") or uid or "—"
+                    assigned_opts.append((label[:50], uid))
+                current_assigned = (self._contact or {}).get("assignedTo") or ""
+                if current_assigned and not any(v == current_assigned for (_, v) in assigned_opts):
+                    assigned_opts.append((current_assigned, current_assigned))
+                yield from self._field_row(
+                    "Contact type",
+                    Select(
+                        ctype_opts,
+                        value=cur_ctype or "",
+                        allow_blank=True,
+                        id="contact-type",
+                    ),
+                    "Assigned to",
+                    Select(
+                        assigned_opts,
+                        value=current_assigned or "",
+                        allow_blank=True,
+                        id="contact-assigned",
+                    ),
+                )
+                yield from self._field_row(
+                    "Company",
+                    Input(
+                        value=(self._contact or {}).get("companyName", ""),
+                        placeholder="Company",
+                        id="contact-company",
+                    ),
+                    "Source",
+                    Input(
+                        value=(self._contact or {}).get("source", ""),
+                        placeholder="Lead source",
+                        id="contact-source",
+                    ),
+                )
+                self._custom_field_ids = []
+                self._dropdown_field_ids = set()
+                custom_cells: list[tuple[str, Widget]] = []
+                for field in self._custom_field_defs:
+                    fk = (field.get("fieldKey") or field.get("key") or "").strip().lower()
+                    if fk == "contact.type":
+                        continue
+                    fid = str(field.get("id") or field.get("customFieldId", ""))
+                    if not fid:
+                        continue
+                    self._custom_field_ids.append(fid)
+                    name = field.get("name") or field.get("label", fid)
+                    value = self._custom_values_map.get(fid, "")
+                    opts = custom_fields_svc.get_field_options(field)
+                    is_dropdown = custom_fields_svc.field_has_options(field)
+                    if is_dropdown:
+                        self._dropdown_field_ids.add(fid)
+                        options: list[tuple[str, str]] = [("— (empty)", "")]
+                        options.extend(opts)
+                        if value and not any(v == value for (_, v) in options):
+                            options.append((value, value))
+                        custom_cells.append(
+                            (
+                                name,
+                                Select(
+                                    options,
+                                    value=value or "",
+                                    allow_blank=True,
+                                    id=self._safe_id(fid),
+                                ),
+                            )
+                        )
+                    else:
+                        custom_cells.append(
+                            (
+                                name,
+                                Input(value=value, placeholder=name, id=self._safe_id(fid)),
+                            )
+                        )
+                for i in range(0, len(custom_cells), 2):
+                    left_label, left_widget = custom_cells[i]
+                    if i + 1 < len(custom_cells):
+                        right_label, right_widget = custom_cells[i + 1]
+                        yield from self._field_row(left_label, left_widget, right_label, right_widget)
+                    else:
+                        yield from self._field_row(left_label, left_widget)
+            with Horizontal(id="contact-edit-actions"):
                 yield Button("Save", variant="primary", id="contact-save")
                 yield Button("Cancel", id="contact-cancel")
 
