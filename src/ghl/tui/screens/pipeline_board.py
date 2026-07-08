@@ -18,7 +18,7 @@ from textual.widgets import (
 from textual.worker import Worker, WorkerState
 
 from ...auth import get_location_id, get_token
-from ...client import GHLClient
+from ...client import APIError, GHLClient
 from ...services import opportunities as opp_svc
 from ...services import pipelines as pipeline_svc
 from ..opportunity_detail import OpportunityDetailModal
@@ -150,6 +150,15 @@ class PipelineBoardView(Container):
                 pipelines = pipeline_svc.list_pipelines(client)
                 rli = client.rate_limit_info
                 return (pipelines, rli)
+        except APIError as e:
+            msg = e.message
+            try:
+                self.app.call_from_thread(
+                    lambda m=msg: self.notify(m, severity="error")
+                )
+            except Exception:
+                pass
+            return ([], None)
         except httpx.TransportError as e:
             notify_transport_error(self, e)
             return ([], None)
@@ -170,6 +179,15 @@ class PipelineBoardView(Container):
                 )
                 rli = client.rate_limit_info
                 return ({"pipeline": pipeline, "opportunities": opps}, rli)
+        except APIError as e:
+            msg = e.message
+            try:
+                self.app.call_from_thread(
+                    lambda m=msg: self.notify(m, severity="error")
+                )
+            except Exception:
+                pass
+            return ({}, None)
         except httpx.TransportError as e:
             notify_transport_error(self, e)
             return ({}, None)

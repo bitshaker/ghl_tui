@@ -12,7 +12,7 @@ from textual.widgets import Button, DataTable, Label, Select, Static
 from textual.worker import Worker, WorkerState
 
 from ...auth import get_location_id, get_token
-from ...client import GHLClient
+from ...client import APIError, GHLClient
 from ...services import contacts as contact_svc
 from ...services import tasks as tasks_svc
 from ...services import users as users_svc
@@ -209,6 +209,15 @@ class TasksView(Container):
                             contact_map[cid] = cid[:20]
                 rli = client.rate_limit_info
                 return (tasks_filtered, user_map, contact_map, total, page, rli)
+        except APIError as e:
+            msg = e.message
+            try:
+                self.app.call_from_thread(
+                    lambda m=msg: self.notify(m, severity="error")
+                )
+            except Exception:
+                pass
+            return ([], {}, {}, None, page, None)
         except httpx.TransportError as e:
             notify_transport_error(self, e)
             return ([], {}, {}, None, page, None)
@@ -281,6 +290,15 @@ class TasksView(Container):
             with GHLClient(get_token(), get_location_id()) as client:
                 contact_svc.update_task_completed(client, contact_id, task_id, completed)
             return "toggle_done"
+        except APIError as e:
+            msg = e.message
+            try:
+                self.app.call_from_thread(
+                    lambda m=msg: self.notify(m, severity="error")
+                )
+            except Exception:
+                pass
+            return "toggle_aborted"
         except httpx.TransportError as e:
             notify_transport_error(self, e)
             return "toggle_aborted"

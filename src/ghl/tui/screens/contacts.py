@@ -19,7 +19,7 @@ from textual.widgets import (
 from textual.worker import Worker, WorkerState
 
 from ...auth import get_location_id, get_token
-from ...client import GHLClient
+from ...client import APIError, GHLClient
 from ...services import contacts as contact_svc
 from ...services import custom_fields as custom_fields_svc
 from ...services import users as users_svc
@@ -436,6 +436,15 @@ class ContactsView(Container):
                     page = 1
                 rli = client.rate_limit_info
                 return (contacts, total, page, rli)
+        except APIError as e:
+            msg = e.message
+            try:
+                self.app.call_from_thread(
+                    lambda m=msg: self.notify(m, severity="error")
+                )
+            except Exception:
+                pass
+            return ([], 0, page, None)
         except httpx.TransportError as e:
             notify_transport_error(self, e)
             return ([], 0, page, None)
@@ -485,6 +494,15 @@ class ContactsView(Container):
                     assigned_to_display,
                     rli,
                 )
+        except APIError as e:
+            msg = e.message
+            try:
+                self.app.call_from_thread(
+                    lambda m=msg: self.notify(m, severity="error")
+                )
+            except Exception:
+                pass
+            return (None, [], [], [], [], None, None)
         except httpx.TransportError as e:
             notify_transport_error(self, e)
             return (None, [], [], [], [], None, None)
