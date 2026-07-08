@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Select, Static
+from textual.widgets import Button, Input, Label, ListItem, ListView, Select, Static
 
 from ..saved_searches import list_saved_searches, save_search
 from ..services import custom_fields as custom_fields_svc
@@ -300,42 +301,96 @@ class ContactFilterModal(ModalScreen[Optional[dict[str, Any]]]):
 class SavedSearchesModal(ModalScreen[Optional[tuple[dict[str, Any], Optional[str]]]]):
     """Pick a saved search or 'All contacts'. Returns (filter_dict, saved_search_name or None)."""
 
+    BINDINGS = [
+        Binding("escape", "dismiss", "Cancel", priority=True),
+    ]
+
+    DEFAULT_CSS = """
+    SavedSearchesModal {
+        align: center middle;
+    }
+    #saved-searches-form {
+        width: 88;
+        min-width: 56;
+        max-width: 95%;
+        height: auto;
+        max-height: 90%;
+        padding: 1 1;
+        border: solid $primary;
+        background: $surface;
+    }
+    #saved-searches-title {
+        height: 1;
+        margin-bottom: 0;
+    }
+    #saved-searches-hint {
+        height: 1;
+        margin-bottom: 1;
+    }
+    #saved-searches-list {
+        height: auto;
+        min-height: 3;
+        max-height: 20;
+        margin-bottom: 1;
+        border: tall $primary;
+    }
+    #saved-searches-actions {
+        height: auto;
+    }
+    #saved-searches-actions Button {
+        margin-right: 2;
+    }
+    """
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._searches = list_saved_searches()
+        self._choices: list[tuple[dict[str, Any], Optional[str]]] = []
 
     def compose(self):
-        with Vertical():
-            yield Label("Saved searches")
-            yield Button("All contacts", variant="primary", id="saved-all")
-            for s in self._searches:
-                name = s.get("name") or "Unnamed"
-                bid = f"saved-{s.get('id', '')}"
-                yield Button(name, id=bid)
-            yield Button("Cancel", id="saved-cancel")
+        with Vertical(id="saved-searches-form"):
+            yield Label("Saved searches", id="saved-searches-title")
+            yield Static(
+                "[dim]↑↓ browse · Enter load · Esc cancel[/dim]",
+                id="saved-searches-hint",
+            )
+            yield ListView(id="saved-searches-list")
+            with Horizontal(id="saved-searches-actions"):
+                yield Button("Load", variant="primary", id="saved-load")
+                yield Button("Cancel", id="saved-cancel")
+
+    def on_mount(self) -> None:
+        self._choices = [(_filter_dict([], None, None, []), None)]
+        lst = self.query_one("#saved-searches-list", ListView)
+        lst.append(ListItem(Label("All contacts")))
+        for s in self._searches:
+            name = s.get("name") or "Unnamed"
+            self._choices.append(
+                (
+                    _filter_dict(
+                        s.get("tags") or [],
+                        s.get("assignedTo"),
+                        s.get("query"),
+                        s.get("customFieldFilters") or [],
+                    ),
+                    s.get("name"),
+                )
+            )
+            lst.append(ListItem(Label(name)))
+        lst.index = 0
+        lst.focus()
+
+    def _dismiss_choice(self, index: int) -> None:
+        if 0 <= index < len(self._choices):
+            self.dismiss(self._choices[index])
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        self._dismiss_choice(event.list_view.index)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        bid = event.button.id
-        if bid == "saved-cancel":
+        if event.button.id == "saved-cancel":
             self.dismiss(None)
             return
-        if bid == "saved-all":
-            self.dismiss((_filter_dict([], None, None, []), None))
-            return
-        if bid is not None and bid.startswith("saved-"):
-            sid = bid.replace("saved-", "", 1)
-            for s in self._searches:
-                if s.get("id") == sid:
-                    self.dismiss(
-                        (
-                            _filter_dict(
-                                s.get("tags") or [],
-                                s.get("assignedTo"),
-                                s.get("query"),
-                                s.get("customFieldFilters") or [],
-                            ),
-                            s.get("name"),
-                        )
-                    )
-                    return
-            self.dismiss(None)
+        if event.button.id == "saved-load":
+            lst = self.query_one("#saved-searches-list", ListView)
+            self._dismiss_choice(lst.index)

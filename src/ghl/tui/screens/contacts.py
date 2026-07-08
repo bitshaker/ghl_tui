@@ -7,6 +7,7 @@ from typing import Any, Optional
 import httpx
 from textual import work
 from textual.binding import Binding
+from textual.events import Focus
 from textual.containers import Container, Vertical
 from textual.widgets import (
     Input,
@@ -236,6 +237,25 @@ class ContactTasksPreview(Static):
         self.update("")
 
 
+class ContactSearchInput(Input):
+    """Search field for contacts; Escape cancels in-progress edits."""
+
+    BINDINGS = [
+        Binding("escape", "cancel_search", "Cancel search", show=False),
+    ]
+
+    revert_value: str = ""
+
+    def action_cancel_search(self) -> None:
+        self.value = self.revert_value
+        parent = self.parent
+        if parent is not None:
+            try:
+                parent.query_one("#contacts-list", ListView).focus()
+            except Exception:
+                self.blur()
+
+
 class ContactsView(Container):
     """Contacts browse, search, and detail panel."""
 
@@ -291,9 +311,12 @@ class ContactsView(Container):
         self._total_contacts: int = 0
         self._page_limit: int = 50
 
+    def _remember_search_value(self, inp: ContactSearchInput) -> None:
+        inp.revert_value = inp.value
+
     def compose(self):
         with Vertical(id="contacts-left"):
-            yield Input(placeholder="Search contacts…", id="contacts-search")
+            yield ContactSearchInput(placeholder="Search contacts…", id="contacts-search")
             yield Static("", id="contacts-filter-label")
             yield Static("", id="contacts-pagination")
             yield ListView(id="contacts-list")
@@ -313,8 +336,15 @@ class ContactsView(Container):
             contact = self._contacts[self._selected_index]
             self.load_contact_detail(contact.get("id"))
 
+    def on_focus(self, event: Focus) -> None:
+        focused = event.focused
+        if isinstance(focused, ContactSearchInput) and focused.id == "contacts-search":
+            self._remember_search_value(focused)
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "contacts-search":
+            inp = self.query_one("#contacts-search", ContactSearchInput)
+            self._remember_search_value(inp)
             self._current_page = 1
             self.load_contacts(page_override=1)
 
@@ -537,7 +567,9 @@ class ContactsView(Container):
         lst.focus()
 
     def action_focus_search(self) -> None:
-        self.query_one("#contacts-search", Input).focus()
+        inp = self.query_one("#contacts-search", ContactSearchInput)
+        self._remember_search_value(inp)
+        inp.focus()
 
     def action_refresh_contacts(self) -> None:
         """Reload the contacts list from the API."""
