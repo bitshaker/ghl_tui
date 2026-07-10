@@ -12,6 +12,14 @@ class AuthError(Exception):
     pass
 
 
+def apply_session_profile(profile_name: str) -> None:
+    """Set a one-off profile for this process. Raises AuthError if profile does not exist."""
+    try:
+        config_manager.set_session_profile(profile_name)
+    except ValueError as e:
+        raise AuthError(str(e))
+
+
 def get_token() -> str:
     """
     Get the API token, raising an error if not configured.

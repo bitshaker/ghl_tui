@@ -138,7 +138,7 @@ ghl config clear --all        # Clear all configuration
 
 ### Profiles (multiple GHL locations)
 
-You can store multiple **profiles**, each with its own API token and location ID. The **active** profile is used for all commands and the TUI, and your last choice is remembered.
+You can store multiple **profiles**, each with its own API token and location ID. The **active** profile is used for all commands and the TUI by default, and your last choice is remembered.
 
 ```bash
 ghl config profiles add NAME                           # Add profile (prompts for token & location)
@@ -147,6 +147,16 @@ ghl config profiles list                               # List profiles (* = acti
 ghl config profiles use NAME                           # Switch to this profile (persisted)
 ghl config profiles remove NAME                        # Remove a profile
 ```
+
+Use a saved profile for a single run without changing the default:
+
+```bash
+ghl tui work                          # TUI with profile "work" (one-off)
+ghl --profile work contacts list      # CLI command with profile "work" (one-off)
+ghl config profiles use work          # persist as default (unchanged)
+```
+
+`GHL_API_TOKEN` and `GHL_LOCATION_ID` still override profile credentials for that run.
 
 Example: add `work` and `personal`, then run `ghl config profiles use personal` — the next time you run `ghl` or `ghl tui`, that profile is used by default.
 

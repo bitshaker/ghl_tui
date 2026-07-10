@@ -38,6 +38,7 @@ class ConfigManager:
     def __init__(self):
         self._config: Optional[GHLConfig] = None
         self._profiles_data: Optional[dict] = None
+        self._session_profile: Optional[str] = None
 
     def _ensure_config_dir(self) -> None:
         """Create config directory if it doesn't exist."""
@@ -69,10 +70,26 @@ class ConfigManager:
         os.chmod(self.CONFIG_FILE, 0o600)
         self._config = config
 
+    def set_session_profile(self, name: str) -> None:
+        """Use a profile for this process only (does not change persisted active profile)."""
+        if not self.get_profile(name):
+            raise ValueError(f"Profile '{name}' does not exist")
+        self._session_profile = name
+
+    def clear_session_profile(self) -> None:
+        """Clear the session profile override."""
+        self._session_profile = None
+
+    def get_effective_profile_name(self) -> Optional[str]:
+        """Profile name used for credential resolution (session override or persisted active)."""
+        if self._session_profile and self.get_profile(self._session_profile):
+            return self._session_profile
+        return self.get_active_profile_name()
+
     def update_config(self, **kwargs) -> GHLConfig:
         """Update configuration with new values. Updates active profile location_id if set."""
         if "location_id" in kwargs and kwargs["location_id"] is not None:
-            active_name = self.get_active_profile_name()
+            active_name = self.get_effective_profile_name()
             if active_name:
                 profile = self.get_profile(active_name)
                 if profile:
@@ -185,10 +202,10 @@ class ConfigManager:
         if env_token:
             return env_token
 
-        # Then active profile (token + location go together)
-        active_name = self.get_active_profile_name()
-        if active_name:
-            profile = self.get_profile(active_name)
+        # Then effective profile (session override or persisted active)
+        effective_name = self.get_effective_profile_name()
+        if effective_name:
+            profile = self.get_profile(effective_name)
             if profile:
                 return profile.api_token
 
@@ -213,8 +230,8 @@ class ConfigManager:
         return None
 
     def set_token(self, token: str, use_keyring: bool = False) -> None:
-        """Store the API token securely. Updates active profile if one is set."""
-        active_name = self.get_active_profile_name()
+        """Store the API token securely. Updates effective profile if one is set."""
+        active_name = self.get_effective_profile_name()
         if active_name:
             profile = self.get_profile(active_name)
             if profile:
@@ -255,10 +272,10 @@ class ConfigManager:
         env_location = os.environ.get("GHL_LOCATION_ID")
         if env_location:
             return env_location
-        # Active profile (token + location go together)
-        active_name = self.get_active_profile_name()
-        if active_name:
-            profile = self.get_profile(active_name)
+        # Effective profile (session override or persisted active)
+        effective_name = self.get_effective_profile_name()
+        if effective_name:
+            profile = self.get_profile(effective_name)
             if profile:
                 return profile.location_id
         return self.config.location_id

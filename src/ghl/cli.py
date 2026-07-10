@@ -16,7 +16,7 @@ if env_path.exists():
 import click  # noqa: E402
 
 from . import __version__  # noqa: E402
-from .auth import AuthError, get_location_id, get_token  # noqa: E402
+from .auth import AuthError, apply_session_profile, get_location_id, get_token  # noqa: E402
 from .client import APIError  # noqa: E402
 from .commands import (  # noqa: E402
     calendars,
@@ -43,8 +43,14 @@ from .commands import (  # noqa: E402
 @click.option(
     "--quiet", "-q", "output_format", flag_value="quiet", default=None, help="Output only IDs"
 )
+@click.option(
+    "--profile",
+    "profile_name",
+    metavar="NAME",
+    help="Use this saved profile for this command only",
+)
 @click.pass_context
-def main(ctx, output_format=None):
+def main(ctx, output_format=None, profile_name=None):
     """GoHighLevel CLI - Command-line interface for GoHighLevel API v2.
 
     Manage contacts, calendars, opportunities, conversations, and more
@@ -63,6 +69,11 @@ def main(ctx, output_format=None):
     ctx.ensure_object(dict)
     if output_format is not None:
         ctx.obj["output_format"] = output_format
+    if profile_name is not None:
+        try:
+            apply_session_profile(profile_name)
+        except AuthError as e:
+            raise click.ClickException(f"{e} Run 'ghl config profiles list' to see saved profiles.")
 
 
 # Register command groups
@@ -81,9 +92,12 @@ main.add_command(pipelines)
 
 
 @click.command("tui")
-def tui_cmd():
+@click.argument("profile", required=False)
+def tui_cmd(profile):
     """Launch the interactive TUI (contacts, pipeline board)."""
     try:
+        if profile:
+            apply_session_profile(profile)
         get_token()
         get_location_id()
     except AuthError as e:

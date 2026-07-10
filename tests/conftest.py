@@ -41,6 +41,7 @@ def mock_config_dir(tmp_path, monkeypatch):
     # Clear in-memory caches so this test sees only the patched paths
     config_manager._profiles_data = None
     config_manager._config = None
+    config_manager.clear_session_profile()
 
     return config_dir
 

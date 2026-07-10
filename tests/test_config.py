@@ -7,6 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from ghl.cli import main
+from ghl.config import config_manager
 
 
 class TestConfigCommands:
@@ -148,3 +149,35 @@ class TestConfigCommands:
         result = runner.invoke(main, ["config", "profiles", "list"])
         assert result.exit_code == 0
         assert "No profiles" in result.output
+
+
+class TestSessionProfile:
+    """Test one-off session profile override."""
+
+    def test_session_profile_overrides_active(self, mock_config_dir):
+        """Session profile credentials override persisted active profile."""
+        config_manager.add_or_update_profile("work", "token-a", "loc-a")
+        config_manager.add_or_update_profile("personal", "token-b", "loc-b")
+        config_manager.set_active_profile("work")
+
+        config_manager.set_session_profile("personal")
+        assert config_manager.get_token() == "token-b"
+        assert config_manager.get_location_id() == "loc-b"
+        assert config_manager.get_effective_profile_name() == "personal"
+        assert config_manager.get_active_profile_name() == "work"
+
+    def test_unknown_session_profile_raises(self, mock_config_dir):
+        """Unknown session profile raises ValueError."""
+        with pytest.raises(ValueError, match="does not exist"):
+            config_manager.set_session_profile("nonexistent")
+
+    def test_session_does_not_change_persisted_active(self, mock_config_dir):
+        """Session override does not write to profiles.json active field."""
+        config_manager.add_or_update_profile("work", "token-a", "loc-a")
+        config_manager.add_or_update_profile("personal", "token-b", "loc-b")
+        config_manager.set_active_profile("work")
+        config_manager.set_session_profile("personal")
+
+        profiles_file = mock_config_dir / "profiles.json"
+        data = json.loads(profiles_file.read_text())
+        assert data["active"] == "work"
