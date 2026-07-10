@@ -135,10 +135,13 @@ class TestConfigCommands:
         assert "personal" in result.output
 
     def test_profiles_use_unknown_fails(self, runner, mock_config_dir):
-        """Test that use with unknown profile fails."""
+        """Test that use with unknown profile fails and lists available profiles."""
+        runner.invoke(main, ["config", "profiles", "add", "work", "-t", "t", "-l", "l"])
         result = runner.invoke(main, ["config", "profiles", "use", "nonexistent"])
         assert result.exit_code != 0
         assert "does not exist" in result.output
+        assert "Profiles" in result.output
+        assert "work" in result.output
 
     def test_profiles_remove(self, runner, mock_config_dir):
         """Test removing a profile."""
@@ -166,10 +169,28 @@ class TestSessionProfile:
         assert config_manager.get_effective_profile_name() == "personal"
         assert config_manager.get_active_profile_name() == "work"
 
-    def test_unknown_session_profile_raises(self, mock_config_dir):
-        """Unknown session profile raises ValueError."""
-        with pytest.raises(ValueError, match="does not exist"):
+    def test_session_profile_case_insensitive(self, mock_config_dir):
+        """Session profile lookup is case-insensitive."""
+        config_manager.add_or_update_profile("work", "token-a", "loc-a")
+        config_manager.add_or_update_profile("personal", "token-b", "loc-b")
+
+        config_manager.set_session_profile("PERSONAL")
+        assert config_manager.get_effective_profile_name() == "personal"
+        assert config_manager.get_token() == "token-b"
+
+    def test_unknown_session_profile_lists_available(self, mock_config_dir):
+        """Unknown session profile error lists available profiles."""
+        config_manager.add_or_update_profile("work", "token-a", "loc-a")
+        config_manager.add_or_update_profile("personal", "token-b", "loc-b")
+        config_manager.set_active_profile("work")
+
+        with pytest.raises(ValueError, match="does not exist") as exc:
             config_manager.set_session_profile("nonexistent")
+        message = str(exc.value)
+        assert "Profiles" in message
+        assert "work" in message
+        assert "personal" in message
+        assert "* = active" in message
 
     def test_session_does_not_change_persisted_active(self, mock_config_dir):
         """Session override does not write to profiles.json active field."""

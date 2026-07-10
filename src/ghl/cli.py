@@ -73,7 +73,7 @@ def main(ctx, output_format=None, profile_name=None):
         try:
             apply_session_profile(profile_name)
         except AuthError as e:
-            raise click.ClickException(f"{e} Run 'ghl config profiles list' to see saved profiles.")
+            raise click.ClickException(str(e))
 
 
 # Register command groups

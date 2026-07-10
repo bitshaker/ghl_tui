@@ -70,11 +70,42 @@ class ConfigManager:
         os.chmod(self.CONFIG_FILE, 0o600)
         self._config = config
 
+    def _resolve_profile_name(self, name: str) -> Optional[str]:
+        """Resolve profile name case-insensitively; returns canonical stored name."""
+        data = self._load_profiles_data()
+        profiles = data.get("profiles") or {}
+        name_lower = name.lower()
+        matches = [key for key in profiles if key.lower() == name_lower]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise ValueError(
+                f"Profile name '{name}' is ambiguous (matches: {', '.join(sorted(matches))})"
+            )
+        return None
+
+    def format_profiles_list_text(self) -> str:
+        """Plain-text profile listing (same layout as 'ghl config profiles list')."""
+        items = self.list_profiles()
+        if not items:
+            return "\nNo profiles yet. Add one with: ghl config profiles add <name>\n"
+        lines = ["", "Profiles", ""]
+        for profile_name, is_active in items:
+            mark = " *" if is_active else ""
+            lines.append(f"  {profile_name}{mark}")
+        lines.extend(["", "  * = active (used by default)", ""])
+        return "\n".join(lines)
+
+    def profile_not_found_message(self, name: str) -> str:
+        """Error message for unknown profile, including available profiles."""
+        return f"Profile '{name}' does not exist.{self.format_profiles_list_text()}"
+
     def set_session_profile(self, name: str) -> None:
         """Use a profile for this process only (does not change persisted active profile)."""
-        if not self.get_profile(name):
-            raise ValueError(f"Profile '{name}' does not exist")
-        self._session_profile = name
+        resolved = self._resolve_profile_name(name)
+        if not resolved:
+            raise ValueError(self.profile_not_found_message(name))
+        self._session_profile = resolved
 
     def clear_session_profile(self) -> None:
         """Clear the session profile override."""
@@ -136,11 +167,11 @@ class ConfigManager:
 
     def set_active_profile(self, name: str) -> None:
         """Set the active profile by name. Persists to disk."""
+        resolved = self._resolve_profile_name(name)
+        if not resolved:
+            raise ValueError(self.profile_not_found_message(name))
         data = self._load_profiles_data()
-        profiles = data.get("profiles") or {}
-        if name not in profiles:
-            raise ValueError(f"Profile '{name}' does not exist")
-        data["active"] = name
+        data["active"] = resolved
         self._profiles_data = data
         self._save_profiles_data()
 
@@ -152,10 +183,13 @@ class ConfigManager:
         return [(name, name == active) for name in sorted(profiles.keys())]
 
     def get_profile(self, name: str) -> Optional[ProfileModel]:
-        """Get a profile by name."""
+        """Get a profile by name (case-insensitive)."""
+        resolved = self._resolve_profile_name(name)
+        if not resolved:
+            return None
         data = self._load_profiles_data()
         profiles = data.get("profiles") or {}
-        raw = profiles.get(name)
+        raw = profiles.get(resolved)
         if not raw:
             return None
         try:
@@ -176,14 +210,15 @@ class ConfigManager:
 
     def remove_profile(self, name: str) -> Optional[str]:
         """Remove a profile. Returns previous active name if we removed it, else None."""
+        resolved = self._resolve_profile_name(name)
+        if not resolved:
+            raise ValueError(self.profile_not_found_message(name))
         data = self._load_profiles_data()
         profiles = data.get("profiles") or {}
-        if name not in profiles:
-            raise ValueError(f"Profile '{name}' does not exist")
-        del profiles[name]
+        del profiles[resolved]
         data["profiles"] = profiles
         prev_active = data.get("active")
-        if data.get("active") == name:
+        if data.get("active") == resolved:
             data["active"] = next(iter(profiles), None)
         self._profiles_data = data
         self._save_profiles_data()

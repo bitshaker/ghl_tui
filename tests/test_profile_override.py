@@ -33,11 +33,26 @@ class TestProfileOverrideCLI:
             assert result.exit_code == 0
             mock_cls.assert_called_once_with("token-b", "loc-b")
 
+    def test_cli_profile_flag_case_insensitive(
+        self, runner, profiles_setup, sample_contacts
+    ):
+        """--profile resolves profile names case-insensitively."""
+        with patch("ghl.commands.contacts.GHLClient") as mock_cls:
+            client_instance = mock_cls.return_value.__enter__.return_value
+            client_instance.get.return_value = {"contacts": sample_contacts}
+
+            result = runner.invoke(main, ["--profile", "PERSONAL", "contacts", "list"])
+            assert result.exit_code == 0
+            mock_cls.assert_called_once_with("token-b", "loc-b")
+
     def test_tui_unknown_profile_fails(self, runner, profiles_setup):
-        """ghl tui with unknown profile fails before launching."""
+        """ghl tui with unknown profile fails before launching and lists profiles."""
         result = runner.invoke(main, ["tui", "nonexistent"])
         assert result.exit_code != 0
         assert "does not exist" in result.output
+        assert "Profiles" in result.output
+        assert "work" in result.output
+        assert "personal" in result.output
 
     def test_tui_positional_overrides_global_profile(self, runner, profiles_setup):
         """Positional profile on ghl tui wins over --profile."""
